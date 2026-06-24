@@ -1,0 +1,57 @@
+import { BarChart3, FileSpreadsheet, PieChart, Building2 } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { ComingSoon } from "@/components/shared/coming-soon";
+import { Card, CardContent } from "@/components/ui/card";
+
+const PLANNED = [
+  {
+    icon: FileSpreadsheet,
+    title: "Income & expense statement",
+    description: "A full profit-and-loss for any date range, ready to export.",
+  },
+  {
+    icon: PieChart,
+    title: "Expense breakdown by SA105 box",
+    description: "See where the money goes, grouped by tax category.",
+  },
+  {
+    icon: Building2,
+    title: "Per-property P&L",
+    description: "Profitability and yield for each property in the portfolio.",
+  },
+];
+
+export default function ReportsPage() {
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Reports"
+        description="Export-ready statements for you and your accountant."
+      />
+
+      <ComingSoon
+        title="Reports are on the way"
+        description="The data model already captures everything these reports need — they'll plug straight into the existing services."
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          {PLANNED.map((r) => {
+            const Icon = r.icon;
+            return (
+              <Card key={r.title}>
+                <CardContent className="p-5">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <h3 className="mt-3 text-sm font-semibold">{r.title}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {r.description}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </ComingSoon>
+    </div>
+  );
+}

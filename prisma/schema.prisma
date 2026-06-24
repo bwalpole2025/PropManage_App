@@ -1,0 +1,573 @@
+// PropManage — Prisma schema (PostgreSQL).
+//
+// Conventions:
+//  - Enum-like columns are `String`, constrained by TS const-maps in
+//    `lib/enums.ts` & `lib/sa105.ts` (kept as the single source of truth +
+//    label maps for the UI).
+//  - Structured columns use native `Json` / scalar-list (`Int[]`/`String[]`).
+//  - Money is stored as integer minor units (pence, `Int`) plus an ISO
+//    `currency` code, to avoid floating-point drift.
+//  - Audit timestamps `createdAt`/`updatedAt` on all mutable models; soft-delete
+//    via `archivedAt` on key entities (Property, Tenancy).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & access
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  kind          String    @default("LANDLORD") // UserKind: LANDLORD | ACCOUNTANT | ASSISTANT | ADMIN
+  totpSecret    String? // base32 TOTP secret (set during enrolment)
+  totpEnabled   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts             Account[]
+  sessions             Session[]
+  memberships          Membership[]
+  ownedEntities        LandlordEntity[]         @relation("EntityPrincipal")
+  ownerRecords         Owner[]
+  invitesSent          Membership[]             @relation("MembershipInviter")
+  auditLogs            AuditLog[]
+  uploadedFiles        FileObject[]
+  emailVerifyTokens    EmailVerificationToken[]
+  passwordResetTokens  PasswordResetToken[]
+}
+
+// Single-use, hashed token for email verification (sha256(raw) stored).
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Single-use, hashed token for password reset.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Auth.js adapter models (kept for future OAuth; credentials flow uses JWT).
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// The account-tenant boundary. All financial data hangs off a LandlordEntity.
+model LandlordEntity {
+  id              String   @id @default(cuid())
+  displayName     String
+  type            String   @default("INDIVIDUAL") // LandlordType: INDIVIDUAL | PORTFOLIO | LIMITED_COMPANY
+  companyNumber   String?
+  companyName     String?
+  utr             String?
+  vatRegistered   Boolean  @default(false)
+  mtdEnrolled     Boolean  @default(false)
+  principalUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  principal       User                 @relation("EntityPrincipal", fields: [principalUserId], references: [id])
+  memberships     Membership[]
+  owners          Owner[]
+  properties      Property[]
+  transactions    Transaction[]
+  bankConnections BankConnection[]
+  complianceDocs  ComplianceDocument[]
+  importantDates  ImportantDate[]
+  files           FileObject[]
+  taxEstimates    TaxYearEstimate[]
+  mtdConnection   MtdConnection?
+  auditLogs       AuditLog[]
+
+  @@index([principalUserId])
+}
+
+// User <-> LandlordEntity link that powers multi-tenant + delegated access.
+model Membership {
+  id              String   @id @default(cuid())
+  userId          String
+  landlordEntityId String
+  role            String   @default("VIEWER") // MembershipRole: OWNER | MANAGER | ACCOUNTANT | ASSISTANT | VIEWER
+  scope           Json?    // e.g. {"propertyIds":[...]} ; null = full entity
+  status          String   @default("ACTIVE") // MembershipStatus: INVITED | ACTIVE | REVOKED
+  inviteEmail     String?
+  inviteToken     String?  @unique
+  invitedByUserId String?
+  acceptedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity    LandlordEntity @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  invitedBy User?          @relation("MembershipInviter", fields: [invitedByUserId], references: [id])
+
+  @@unique([userId, landlordEntityId])
+  @@index([landlordEntityId])
+}
+
+// Beneficial / tax owner of properties (may be an external party with no login).
+model Owner {
+  id              String   @id @default(cuid())
+  landlordEntityId String
+  userId          String?
+  legalName       String
+  isCompany       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  entity          LandlordEntity   @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  user            User?            @relation(fields: [userId], references: [id])
+  ownershipShares OwnershipShare[]
+
+  @@index([landlordEntityId])
+}
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  landlordEntityId String
+  actorUserId     String?
+  action          String
+  targetType      String?
+  targetId        String?
+  metadata        Json?
+  at              DateTime @default(now())
+
+  entity LandlordEntity @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  actor  User?          @relation(fields: [actorUserId], references: [id])
+
+  @@index([landlordEntityId, at])
+}
+
+// ---------------------------------------------------------------------------
+// Property & tenancy
+// ---------------------------------------------------------------------------
+
+model Property {
+  id               String   @id @default(cuid())
+  landlordEntityId String
+  addressLine1     String
+  addressLine2     String?
+  city             String
+  postcode         String
+  country          String   @default("GB")
+  propertyType     String   @default("FLAT") // PropertyType
+  bedrooms         Int?
+  purchaseDate     DateTime?
+  purchasePricePence Int?
+  currentValuePence  Int?
+  furnished        Boolean?
+  isFHL            Boolean  @default(false)
+  archivedAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  entity          LandlordEntity       @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  ownershipShares OwnershipShare[]
+  tenancies       Tenancy[]
+  transactions    Transaction[]
+  complianceDocs  ComplianceDocument[]
+  importantDates  ImportantDate[]
+  files           FileObject[]
+
+  @@index([landlordEntityId])
+}
+
+model OwnershipShare {
+  id            String   @id @default(cuid())
+  propertyId    String
+  ownerId       String
+  percentageBp  Int // basis points, 0..10000 (5000 = 50%)
+  effectiveFrom DateTime @default(now())
+  effectiveTo   DateTime?
+  createdAt     DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  owner    Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([ownerId])
+}
+
+model Tenancy {
+  id            String   @id @default(cuid())
+  propertyId    String
+  status        String   @default("ACTIVE") // TenancyStatus
+  startDate     DateTime
+  endDate       DateTime?
+  isPeriodic    Boolean  @default(false)
+  rentPence     Int
+  currency      String   @default("GBP") // ISO 4217
+  rentFrequency String   @default("MONTHLY") // RentFrequency
+  rentDueDay    Int? // day-of-month 1..31 (or day-of-week for weekly)
+  depositPence  Int?
+  depositScheme String? // DepositScheme
+  depositRef    String?
+  archivedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  property     Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenants      Tenant[]
+  rentSchedule RentScheduleEntry[]
+  transactions Transaction[]
+  arrearsAlerts ArrearsAlert[]
+
+  @@index([propertyId])
+  @@index([propertyId, archivedAt])
+}
+
+model Tenant {
+  id           String  @id @default(cuid())
+  tenancyId    String
+  name         String
+  email        String?
+  phone        String?
+  isLeadTenant Boolean @default(false)
+
+  tenancy Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+
+  @@index([tenancyId])
+}
+
+// ---------------------------------------------------------------------------
+// Money: transactions & arrears
+// ---------------------------------------------------------------------------
+
+model Transaction {
+  id               String   @id @default(cuid())
+  landlordEntityId String
+  propertyId       String?
+  tenancyId        String?
+  direction        String   // TxnDirection: INCOME | EXPENSE
+  amountPence      Int      // always positive; sign implied by direction
+  currency         String   @default("GBP") // ISO 4217
+  date             DateTime
+  description      String
+  merchant         String?
+  category         String?  // Sa105Category
+  source           String   @default("MANUAL") // TxnSource: BANK_FEED | MANUAL | IMPORTED
+  status           String   @default("UNRECONCILED") // TxnStatus
+  bankTransactionId String? @unique
+  splitParentId    String?
+  attachmentFileId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  entity      LandlordEntity   @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  property    Property?        @relation(fields: [propertyId], references: [id])
+  tenancy     Tenancy?         @relation(fields: [tenancyId], references: [id])
+  bankTxn     BankTransaction? @relation(fields: [bankTransactionId], references: [id])
+  splitParent Transaction?     @relation("TxnSplit", fields: [splitParentId], references: [id])
+  splits      Transaction[]    @relation("TxnSplit")
+  attachment  FileObject?      @relation(fields: [attachmentFileId], references: [id])
+
+  @@index([landlordEntityId, date])
+  @@index([propertyId])
+  @@index([tenancyId])
+}
+
+// Expected rent obligations generated from a Tenancy; the basis of arrears.
+model RentScheduleEntry {
+  id            String   @id @default(cuid())
+  tenancyId     String
+  dueDate       DateTime
+  expectedPence Int
+  receivedPence Int      @default(0)
+  status        String   @default("DUE") // RentStatus
+  matchedTransactionIds String[] @default([])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenancy Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+  arrearsAlerts ArrearsAlert[]
+
+  @@unique([tenancyId, dueDate])
+  @@index([tenancyId])
+}
+
+model ArrearsAlert {
+  id                  String   @id @default(cuid())
+  tenancyId           String
+  rentScheduleEntryId String
+  shortfallPence      Int
+  daysOverdue         Int
+  firstDetectedAt     DateTime @default(now())
+  resolvedAt          DateTime?
+
+  tenancy   Tenancy           @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+  scheduleEntry RentScheduleEntry @relation(fields: [rentScheduleEntryId], references: [id], onDelete: Cascade)
+
+  @@index([tenancyId])
+}
+
+// ---------------------------------------------------------------------------
+// Banking (mock-first)
+// ---------------------------------------------------------------------------
+
+model BankConnection {
+  id                   String   @id @default(cuid())
+  landlordEntityId     String
+  provider             String   @default("mock")
+  providerConnectionId String
+  institutionName      String?
+  status               String   @default("ACTIVE") // BankConnStatus
+  accessTokenEnc       String?
+  refreshTokenEnc      String?
+  expiresAt            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  entity   LandlordEntity @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  accounts BankAccount[]
+
+  @@index([landlordEntityId])
+}
+
+model BankAccount {
+  id                   String   @id @default(cuid())
+  bankConnectionId     String
+  providerAccountId    String
+  name                 String
+  sortCode             String?
+  accountNumberMasked  String?
+  currency             String   @default("GBP")
+  createdAt            DateTime @default(now())
+
+  connection      BankConnection    @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
+  bankTransactions BankTransaction[]
+
+  @@index([bankConnectionId])
+}
+
+model BankTransaction {
+  id            String   @id @default(cuid())
+  bankAccountId String
+  providerTxnId String   @unique
+  amountPence   Int
+  date          DateTime
+  description   String
+  rawCategory   String?
+  createdAt     DateTime @default(now())
+
+  account     BankAccount  @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  matchedTxn  Transaction?
+
+  @@index([bankAccountId, date])
+}
+
+// ---------------------------------------------------------------------------
+// Compliance, dates & files
+// ---------------------------------------------------------------------------
+
+model ComplianceDocument {
+  id                  String   @id @default(cuid())
+  landlordEntityId    String
+  propertyId          String?
+  type                String   // ComplianceType: EPC | GAS_SAFETY | EICR | ...
+  issuedDate          DateTime?
+  expiryDate          DateTime
+  reference           String?
+  fileId              String?
+  reminderOffsetsDays Int[]    @default([30, 14, 7, 1])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  entity    LandlordEntity       @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  property  Property?            @relation(fields: [propertyId], references: [id])
+  file      FileObject?          @relation(fields: [fileId], references: [id])
+  reminders ComplianceReminder[]
+
+  @@index([landlordEntityId])
+  @@index([expiryDate])
+}
+
+model ComplianceReminder {
+  id                   String   @id @default(cuid())
+  complianceDocumentId String
+  fireOn               DateTime
+  offsetDays           Int
+  status               String   @default("PENDING") // ReminderStatus: PENDING | SENT | DISMISSED
+  sentAt               DateTime?
+
+  document ComplianceDocument @relation(fields: [complianceDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([complianceDocumentId])
+  @@index([fireOn, status])
+}
+
+model ImportantDate {
+  id               String   @id @default(cuid())
+  landlordEntityId String
+  propertyId       String?
+  tenancyId        String?
+  title            String
+  date             DateTime
+  kind             String   @default("CUSTOM") // ImportantDateKind
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  entity   LandlordEntity @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  property Property?      @relation(fields: [propertyId], references: [id])
+
+  @@index([landlordEntityId, date])
+}
+
+model FileObject {
+  id               String   @id @default(cuid())
+  landlordEntityId String
+  propertyId       String?
+  tenancyId        String?
+  filename         String
+  mimeType         String
+  sizeBytes        Int
+  storageKey       String
+  uploadedByUserId String?
+  createdAt        DateTime @default(now())
+
+  entity         LandlordEntity       @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  property       Property?            @relation(fields: [propertyId], references: [id])
+  uploadedBy     User?                @relation(fields: [uploadedByUserId], references: [id])
+  complianceDocs ComplianceDocument[]
+  transactions   Transaction[]
+
+  @@index([landlordEntityId])
+}
+
+// ---------------------------------------------------------------------------
+// Tax & MTD
+// ---------------------------------------------------------------------------
+
+model TaxYearEstimate {
+  id                        String   @id @default(cuid())
+  landlordEntityId          String
+  taxYearStart              DateTime // always 6 Apr
+  taxYearLabel              String   // e.g. "2025-26"
+  computedAt                DateTime @default(now())
+  boxBreakdown              Json     // { box -> pence }
+  currency                  String   @default("GBP") // ISO 4217
+  totalIncomePence          Int
+  totalAllowableExpensesPence Int
+  financeCostsPence         Int      @default(0)
+  financeCostTaxReductionPence Int   @default(0)
+  propertyAllowanceUsedPence Int     @default(0)
+  taxableProfitPence        Int
+  estimatedTaxPence         Int?
+
+  entity LandlordEntity @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+
+  @@unique([landlordEntityId, taxYearStart])
+}
+
+model MtdConnection {
+  id                     String   @id @default(cuid())
+  landlordEntityId       String   @unique
+  hmrcUserId             String?
+  accessTokenEnc         String?
+  refreshTokenEnc        String?
+  expiresAt              DateTime?
+  businessIncomeSourceId String?
+  status                 String   @default("NOT_CONNECTED") // MtdStatus
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  entity      LandlordEntity  @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  obligations MtdObligation[]
+  submissions MtdSubmission[]
+}
+
+model MtdObligation {
+  id              String   @id @default(cuid())
+  mtdConnectionId String
+  periodKey       String
+  startDate       DateTime
+  endDate         DateTime
+  dueDate         DateTime
+  type            String   @default("QUARTERLY_UPDATE") // ObligationType
+  status          String   @default("OPEN") // ObligationStatus
+  createdAt       DateTime @default(now())
+
+  connection  MtdConnection   @relation(fields: [mtdConnectionId], references: [id], onDelete: Cascade)
+  submissions MtdSubmission[]
+
+  @@unique([mtdConnectionId, periodKey])
+}
+
+model MtdSubmission {
+  id              String   @id @default(cuid())
+  mtdConnectionId String
+  obligationId    String?
+  type            String   // SubmissionType
+  periodKey       String?
+  taxYearLabel    String?
+  payload         Json
+  status          String   @default("PENDING") // SubmissionStatus
+  hmrcReceiptId   String?
+  submittedAt     DateTime?
+  errorJson       Json?
+  createdAt       DateTime @default(now())
+
+  connection MtdConnection  @relation(fields: [mtdConnectionId], references: [id], onDelete: Cascade)
+  obligation MtdObligation? @relation(fields: [obligationId], references: [id])
+
+  @@index([mtdConnectionId])
+}
