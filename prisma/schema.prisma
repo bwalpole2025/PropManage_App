@@ -147,10 +147,13 @@ model Account {
   properties       Property[]
   transactions     Transaction[]
   bankConnections  BankConnection[]
-  complianceDocs   ComplianceDocument[]
-  importantDates   ImportantDate[]
+  documents        Document[]
+  reminders        Reminder[]
+  mortgages        Mortgage[]
+  valuations       Valuation[]
+  notes            Note[]
   files            FileObject[]
-  taxEstimates     TaxYearEstimate[]
+  taxStatements    TaxStatement[]
   mtdConnection    MtdConnection?
   auditLogs        AuditLog[]
 
@@ -170,10 +173,11 @@ model Portfolio {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  account    Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  company    Company?          @relation(fields: [companyId], references: [id])
-  properties Property[]
-  owners     BeneficialOwner[]
+  account       Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  company       Company?          @relation(fields: [companyId], references: [id])
+  properties    Property[]
+  owners        BeneficialOwner[]
+  taxStatements TaxStatement[]
 
   @@index([accountId])
   // Partial unique (one default per account) added via raw SQL in the migration:
@@ -235,11 +239,12 @@ model BeneficialOwner {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  account    Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  user       User?               @relation(fields: [userId], references: [id])
-  company    Company?            @relation(fields: [companyId], references: [id])
-  portfolio  Portfolio?          @relation(fields: [portfolioId], references: [id])
-  ownerships PropertyOwnership[]
+  account       Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user          User?               @relation(fields: [userId], references: [id])
+  company       Company?            @relation(fields: [companyId], references: [id])
+  portfolio     Portfolio?          @relation(fields: [portfolioId], references: [id])
+  ownerships    PropertyOwnership[]
+  taxStatements TaxStatement[]
 
   @@index([accountId])
 }
@@ -277,9 +282,15 @@ model Property {
   bedrooms         Int?
   purchaseDate     DateTime?
   purchasePricePence Int?
-  currentValuePence  Int?
+  currentValuePence  Int? // denormalised "current" valuation; Valuation[] is the history
+  rentalIncomeAmountPence Int? // expected/headline rent for the property
+  rentalIncomeFrequency   String @default("MONTHLY") // RentFrequency
   furnished        Boolean?
   isFHL            Boolean  @default(false)
+  streetViewCameraPosition Json? // { heading, pitch, zoom, lat, lng }
+  epcRating        String? // "A".."G"
+  epcScore         Int? // 1..100
+  epcExpiryDate    DateTime?
   archivedAt       DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -290,12 +301,80 @@ model Property {
   ownerships      PropertyOwnership[]
   tenancies       Tenancy[]
   transactions    Transaction[]
-  complianceDocs  ComplianceDocument[]
-  importantDates  ImportantDate[]
+  documents       Document[]
+  reminders       Reminder[]
+  mortgages       Mortgage[]
+  valuations      Valuation[]
+  notes           Note[]
   files           FileObject[]
 
   @@index([accountId])
   @@index([portfolioId])
+}
+
+// A mortgage secured on a property. Money as Int pence; rate as basis points.
+model Mortgage {
+  id                  String    @id @default(cuid())
+  accountId           String
+  propertyId          String
+  lender              String
+  productType         String    @default("FIXED") // MortgageProduct
+  accountNumberMasked String?
+  balancePence        Int
+  monthlyPaymentPence Int
+  interestRateBp      Int // 425 = 4.25%
+  monthlyInterestPence Int?
+  fixedUntil          DateTime?
+  termMonths          Int?
+  currency            String    @default("GBP")
+  startDate           DateTime?
+  archivedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  entity   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([propertyId])
+}
+
+// History of property valuations.
+model Valuation {
+  id          String   @id @default(cuid())
+  accountId   String
+  propertyId  String
+  amountPence Int
+  date        DateTime
+  source      String? // "MANUAL" | "AVM" | "RICS" | ...
+  currency    String   @default("GBP")
+  createdAt   DateTime @default(now())
+
+  entity   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([propertyId, date])
+}
+
+// Free-text note linked to a property or a tenant.
+model Note {
+  id          String   @id @default(cuid())
+  accountId   String
+  propertyId  String?
+  tenantId    String?
+  description String
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entity   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  property Property?  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenant   Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([propertyId])
+  @@index([tenantId])
 }
 
 // Property *—* BeneficialOwner, carrying the ownership percentage (basis points).
@@ -326,9 +405,12 @@ model Tenancy {
   currency      String   @default("GBP") // ISO 4217
   rentFrequency String   @default("MONTHLY") // RentFrequency
   rentDueDay    Int? // day-of-month 1..31 (or day-of-week for weekly)
+  nextPaymentDate DateTime?
   depositPence  Int?
   depositScheme String? // DepositScheme
   depositRef    String?
+  arrearsState  String   @default("CURRENT") // TenancyArrearsState: CURRENT | ARREARS | CREDIT
+  balancePence  Int      @default(0) // signed: negative = arrears, positive = credit
   archivedAt    DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -338,6 +420,8 @@ model Tenancy {
   rentSchedule RentScheduleEntry[]
   transactions Transaction[]
   arrearsAlerts ArrearsAlert[]
+  documents    Document[]
+  reminders    Reminder[]
 
   @@index([propertyId])
   @@index([propertyId, archivedAt])
@@ -352,6 +436,7 @@ model Tenant {
   isLeadTenant Boolean @default(false)
 
   tenancy Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+  notes   Note[]
 
   @@index([tenancyId])
 }
@@ -369,14 +454,18 @@ model Transaction {
   amountPence      Int      // always positive; sign implied by direction
   currency         String   @default("GBP") // ISO 4217
   date             DateTime
+  rentDueDate      DateTime? // for rent txns: which rent period this satisfies
   description      String
   merchant         String?
   category         String?  // Sa105Category
+  subcategory      String?
+  notes            String?
   source           String   @default("MANUAL") // TxnSource: BANK_FEED | MANUAL | IMPORTED
-  status           String   @default("UNRECONCILED") // TxnStatus
+  status           String   @default("UNRECONCILED") // TxnStatus (reconciled=RECONCILED, deactivated=EXCLUDED)
   bankTransactionId String? @unique
   splitParentId    String?
   attachmentFileId String?
+  receiptDocumentId String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -387,6 +476,7 @@ model Transaction {
   splitParent Transaction?     @relation("TxnSplit", fields: [splitParentId], references: [id])
   splits      Transaction[]    @relation("TxnSplit")
   attachment  FileObject?      @relation(fields: [attachmentFileId], references: [id])
+  receiptDocument Document?    @relation("TxnReceipt", fields: [receiptDocumentId], references: [id])
 
   @@index([accountId, date])
   @@index([propertyId])
@@ -486,57 +576,74 @@ model BankTransaction {
 // Compliance, dates & files
 // ---------------------------------------------------------------------------
 
-model ComplianceDocument {
+// A stored document: certificate, tenancy agreement, receipt, statement, etc.
+// (generalised from the former ComplianceDocument). `expiryDate` is optional —
+// only compliance certificates expire and drive reminders.
+model Document {
   id                  String   @id @default(cuid())
-  accountId    String
+  accountId           String
   propertyId          String?
-  type                String   // ComplianceType: EPC | GAS_SAFETY | EICR | ...
+  tenancyId           String?
+  category            String   // DocumentCategory (compliance kinds + tenancy_agreement/receipt/...)
   issuedDate          DateTime?
-  expiryDate          DateTime
+  expiryDate          DateTime?
   reference           String?
   fileId              String?
   reminderOffsetsDays Int[]    @default([30, 14, 7, 1])
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  entity    Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  property  Property?            @relation(fields: [propertyId], references: [id])
-  file      FileObject?          @relation(fields: [fileId], references: [id])
-  reminders ComplianceReminder[]
+  entity        Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  property      Property?          @relation(fields: [propertyId], references: [id])
+  tenancy       Tenancy?           @relation(fields: [tenancyId], references: [id])
+  file          FileObject?        @relation(fields: [fileId], references: [id])
+  reminders     DocumentReminder[]
+  userReminders Reminder[]
+  receiptTxns   Transaction[]      @relation("TxnReceipt")
 
   @@index([accountId])
   @@index([expiryDate])
 }
 
-model ComplianceReminder {
-  id                   String   @id @default(cuid())
-  complianceDocumentId String
-  fireOn               DateTime
-  offsetDays           Int
-  status               String   @default("PENDING") // ReminderStatus: PENDING | SENT | DISMISSED
-  sentAt               DateTime?
+// Materialised per-offset (30/14/7/1) expiry reminder rows for a Document, fired
+// by the background job. Distinct from the user-facing `Reminder`.
+model DocumentReminder {
+  id         String   @id @default(cuid())
+  documentId String
+  fireOn     DateTime
+  offsetDays Int
+  status     String   @default("PENDING") // ReminderStatus: PENDING | SENT | DISMISSED
+  sentAt     DateTime?
 
-  document ComplianceDocument @relation(fields: [complianceDocumentId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  @@index([complianceDocumentId])
+  @@index([documentId])
   @@index([fireOn, status])
 }
 
-model ImportantDate {
-  id               String   @id @default(cuid())
-  accountId String
-  propertyId       String?
-  tenancyId        String?
-  title            String
-  date             DateTime
-  kind             String   @default("CUSTOM") // ImportantDateKind
-  notes            String?
-  createdAt        DateTime @default(now())
+// User-facing reminder / important date (open/completed). Replaces ImportantDate.
+model Reminder {
+  id          String   @id @default(cuid())
+  accountId   String
+  propertyId  String?
+  tenancyId   String?
+  documentId  String?
+  name        String
+  description String?
+  dueDate     DateTime
+  status      String   @default("OPEN") // ReminderState: OPEN | COMPLETED
+  kind        String   @default("CUSTOM") // ImportantDateKind
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  entity   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  property Property?      @relation(fields: [propertyId], references: [id])
+  entity   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  property Property?  @relation(fields: [propertyId], references: [id])
+  tenancy  Tenancy?   @relation(fields: [tenancyId], references: [id])
+  document Document?  @relation(fields: [documentId], references: [id])
 
-  @@index([accountId, date])
+  @@index([accountId, dueDate])
+  @@index([dueDate, status])
 }
 
 model FileObject {
@@ -554,7 +661,7 @@ model FileObject {
   entity         Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
   property       Property?            @relation(fields: [propertyId], references: [id])
   uploadedBy     User?                @relation(fields: [uploadedByUserId], references: [id])
-  complianceDocs ComplianceDocument[]
+  documents      Document[]
   transactions   Transaction[]
 
   @@index([accountId])
@@ -564,9 +671,13 @@ model FileObject {
 // Tax & MTD
 // ---------------------------------------------------------------------------
 
-model TaxYearEstimate {
+// Computed tax summary, scoped to an account and optionally a portfolio or a
+// beneficial owner (pro-rata). Renamed from TaxYearEstimate.
+model TaxStatement {
   id                        String   @id @default(cuid())
-  accountId          String
+  accountId                 String
+  portfolioId               String?
+  beneficialOwnerId         String?
   taxYearStart              DateTime // always 6 Apr
   taxYearLabel              String   // e.g. "2025-26"
   computedAt                DateTime @default(now())
@@ -580,9 +691,12 @@ model TaxYearEstimate {
   taxableProfitPence        Int
   estimatedTaxPence         Int?
 
-  entity Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  entity          Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  portfolio       Portfolio?       @relation(fields: [portfolioId], references: [id])
+  beneficialOwner BeneficialOwner? @relation(fields: [beneficialOwnerId], references: [id])
 
-  @@unique([accountId, taxYearStart])
+  @@unique([accountId, portfolioId, beneficialOwnerId, taxYearStart])
+  @@index([accountId])
 }
 
 model MtdConnection {

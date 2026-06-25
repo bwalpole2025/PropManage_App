@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CurrencyValue } from "@/components/shared/currency-value";
 import { ReminderBadge } from "@/components/shared/reminder-badge";
 import { formatDate, formatPenceCompact } from "@/lib/format";
-import { ComplianceTypeLabel } from "@/lib/enums";
+import { DocumentCategoryLabel } from "@/lib/enums";
 import { Sa105CategoryLabel, isSa105Category } from "@/lib/sa105";
 
 export default async function PropertyOverviewPage({
@@ -43,7 +43,7 @@ export default async function PropertyOverviewPage({
         />
         <StatTile
           label="Certificates"
-          value={property.complianceDocs.length}
+          value={property.documents.length}
           icon={<ShieldCheck className="h-4 w-4" />}
         />
       </div>
@@ -87,25 +87,25 @@ export default async function PropertyOverviewPage({
             <CardTitle>Compliance</CardTitle>
           </CardHeader>
           <CardContent>
-            {property.complianceDocs.length === 0 ? (
+            {property.documents.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No certificates stored.
               </p>
             ) : (
               <ul className="space-y-3">
-                {property.complianceDocs.map((c) => (
+                {property.documents.map((c) => (
                   <li key={c.id} className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">
-                        {ComplianceTypeLabel[
-                          c.type as keyof typeof ComplianceTypeLabel
-                        ] ?? c.type}
+                        {DocumentCategoryLabel[
+                          c.category as keyof typeof DocumentCategoryLabel
+                        ] ?? c.category}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Expires {formatDate(c.expiryDate)}
+                        Expires {formatDate(c.expiryDate!)}
                       </p>
                     </div>
-                    <ReminderBadge date={c.expiryDate} />
+                    <ReminderBadge date={c.expiryDate!} />
                   </li>
                 ))}
               </ul>

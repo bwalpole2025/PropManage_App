@@ -13,8 +13,9 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { Sa105Category } from "../lib/sa105";
+import { taxYearLabelFor, taxYearStartDate } from "../lib/format";
 import {
-  ComplianceType,
+  DocumentCategory,
   DepositScheme,
   LandlordType,
   MembershipRole,
@@ -56,16 +57,19 @@ async function reset() {
     prisma.mtdSubmission.deleteMany(),
     prisma.mtdObligation.deleteMany(),
     prisma.mtdConnection.deleteMany(),
-    prisma.taxYearEstimate.deleteMany(),
-    prisma.complianceReminder.deleteMany(),
-    prisma.complianceDocument.deleteMany(),
-    prisma.importantDate.deleteMany(),
+    prisma.taxStatement.deleteMany(),
+    prisma.documentReminder.deleteMany(),
+    prisma.reminder.deleteMany(),
+    prisma.document.deleteMany(),
     prisma.arrearsAlert.deleteMany(),
     prisma.rentScheduleEntry.deleteMany(),
     prisma.bankTransaction.deleteMany(),
     prisma.bankAccount.deleteMany(),
     prisma.bankConnection.deleteMany(),
     prisma.transaction.deleteMany(),
+    prisma.note.deleteMany(),
+    prisma.mortgage.deleteMany(),
+    prisma.valuation.deleteMany(),
     prisma.fileObject.deleteMany(),
     prisma.tenant.deleteMany(),
     prisma.tenancy.deleteMany(),
@@ -499,17 +503,17 @@ async function main() {
   // --- Compliance documents (varied expiry to show reminder tiers) ---
   const compliance: Array<{
     propertyId: string;
-    type: string;
+    category: string;
     expiry: Date;
     issued?: Date;
     reference?: string;
   }> = [
-    { propertyId: prop1.id, type: ComplianceType.GAS_SAFETY, expiry: daysFromNow(6), reference: "CP12-2024-1187" },
-    { propertyId: prop1.id, type: ComplianceType.EPC, expiry: daysFromNow(25), reference: "EPC-0042-3318-7290" },
-    { propertyId: prop1.id, type: ComplianceType.EICR, expiry: daysFromNow(380) },
-    { propertyId: prop2.id, type: ComplianceType.GAS_SAFETY, expiry: daysFromNow(-3), reference: "CP12-2023-0091" },
-    { propertyId: prop2.id, type: ComplianceType.EPC, expiry: daysFromNow(120) },
-    { propertyId: prop3.id, type: ComplianceType.GAS_SAFETY, expiry: daysFromNow(70) },
+    { propertyId: prop1.id, category: DocumentCategory.GAS_SAFETY, expiry: daysFromNow(6), reference: "CP12-2024-1187" },
+    { propertyId: prop1.id, category: DocumentCategory.EPC, expiry: daysFromNow(25), reference: "EPC-0042-3318-7290" },
+    { propertyId: prop1.id, category: DocumentCategory.EICR, expiry: daysFromNow(380) },
+    { propertyId: prop2.id, category: DocumentCategory.GAS_SAFETY, expiry: daysFromNow(-3), reference: "CP12-2023-0091" },
+    { propertyId: prop2.id, category: DocumentCategory.EPC, expiry: daysFromNow(120) },
+    { propertyId: prop3.id, category: DocumentCategory.GAS_SAFETY, expiry: daysFromNow(70) },
   ];
   const entityForProp: Record<string, string> = {
     [prop1.id]: entityA.id,
@@ -518,11 +522,11 @@ async function main() {
   };
   for (const c of compliance) {
     const offsets = [30, 14, 7, 1];
-    await prisma.complianceDocument.create({
+    await prisma.document.create({
       data: {
         accountId: entityForProp[c.propertyId],
         propertyId: c.propertyId,
-        type: c.type,
+        category: c.category,
         issuedDate: c.issued ?? daysFromNow(-330),
         expiryDate: c.expiry,
         reference: c.reference,
@@ -537,21 +541,21 @@ async function main() {
     });
   }
 
-  // --- Important dates ---
-  await prisma.importantDate.createMany({
+  // --- Reminders (important dates) ---
+  await prisma.reminder.createMany({
     data: [
       {
         accountId: entityA.id,
         propertyId: prop1.id,
-        title: "Tenancy renewal — 12 Oakfield Road",
-        date: daysFromNow(48),
+        name: "Tenancy renewal — 12 Oakfield Road",
+        dueDate: daysFromNow(48),
         kind: "TENANCY_RENEWAL",
       },
       {
         accountId: entityA.id,
         propertyId: prop2.id,
-        title: "Mortgage fixed rate ends",
-        date: daysFromNow(95),
+        name: "Mortgage fixed rate ends",
+        dueDate: daysFromNow(95),
         kind: "MORTGAGE_FIX_END",
       },
     ],
@@ -590,11 +594,108 @@ async function main() {
     ],
   });
 
+  // --- Acceptance: a £500/month ONGOING tenancy + 3 rental transactions in the
+  // current tax year so the dashboard shows non-zero figures. ---
+  const currentTaxYearStart = taxYearStartDate(taxYearLabelFor()); // 6 Apr of current UK tax year
+  const tyYear = currentTaxYearStart.getUTCFullYear();
+  const tenancyOngoing = await prisma.tenancy.create({
+    data: {
+      propertyId: prop2.id,
+      status: TenancyStatus.ACTIVE,
+      startDate: new Date(Date.UTC(tyYear, 3, 6)), // 6 Apr, current tax year
+      endDate: null, // ongoing
+      rentPence: 50_000, // £500
+      rentFrequency: RentFrequency.MONTHLY,
+      rentDueDay: 6,
+      nextPaymentDate: new Date(Date.UTC(tyYear, 6, 6)),
+      arrearsState: "CURRENT",
+      tenants: {
+        create: { name: "Alex Doe", email: "alex.doe@example.com", isLeadTenant: true },
+      },
+    },
+  });
+  await prisma.transaction.createMany({
+    data: [0, 1, 2].map((m) => ({
+      accountId: entityA.id,
+      propertyId: prop2.id,
+      tenancyId: tenancyOngoing.id,
+      direction: TxnDirection.INCOME,
+      amountPence: 50_000,
+      date: new Date(Date.UTC(tyYear, 3 + m, 6)), // Apr / May / Jun, current tax year
+      rentDueDate: new Date(Date.UTC(tyYear, 3 + m, 6)),
+      description: "Monthly rent received",
+      category: Sa105Category.RENT_INCOME,
+      source: TxnSource.BANK_FEED,
+      status: TxnStatus.RECONCILED,
+    })),
+  });
+
+  // --- Exercise the new finance/compliance entities ---
+  await prisma.mortgage.create({
+    data: {
+      accountId: entityA.id,
+      propertyId: prop1.id,
+      lender: "Barclays BTL",
+      productType: "FIXED",
+      balancePence: 19_500_000,
+      monthlyPaymentPence: 78_000,
+      interestRateBp: 425, // 4.25%
+      monthlyInterestPence: 69_000,
+      fixedUntil: daysFromNow(420),
+      termMonths: 300,
+      startDate: new Date(2019, 5, 1),
+    },
+  });
+  await prisma.valuation.create({
+    data: {
+      accountId: entityA.id,
+      propertyId: prop1.id,
+      amountPence: 34_000_000,
+      date: daysFromNow(-30),
+      source: "RICS",
+    },
+  });
+  await prisma.note.create({
+    data: {
+      accountId: entityA.id,
+      propertyId: prop1.id,
+      description: "Boiler serviced; landlord gas certificate renewed.",
+      date: daysFromNow(-10),
+    },
+  });
+  await prisma.reminder.create({
+    data: {
+      accountId: entityA.id,
+      propertyId: prop1.id,
+      name: "Annual gas safety inspection",
+      description: "Book CP12 renewal with AquaHeat.",
+      dueDate: daysFromNow(20),
+      status: "OPEN",
+      kind: "INSPECTION",
+    },
+  });
+  await prisma.taxStatement.create({
+    data: {
+      accountId: entityA.id,
+      taxYearStart: currentTaxYearStart,
+      taxYearLabel: taxYearLabelFor(),
+      boxBreakdown: { box20: 150_000 },
+      totalIncomePence: 150_000,
+      totalAllowableExpensesPence: 0,
+      taxableProfitPence: 150_000,
+      estimatedTaxPence: 30_000,
+    },
+  });
+
   console.log("\n✅ Seed complete.");
   console.log("   Landlord:   landlord@example.com   /", PASSWORD);
   console.log("   Accountant: accountant@example.com /", PASSWORD);
   console.log(
     `   Entities: ${entityA.displayName} (A, 2 properties) + ${entityB.displayName} (B, 1 property)`,
+  );
+  console.log(
+    "   + £500/mo ongoing tenancy and 3 rental transactions in tax year",
+    taxYearLabelFor(),
   );
 }
 

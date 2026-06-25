@@ -55,7 +55,7 @@ export async function uploadFileAction(formData: FormData) {
   });
 
   if (complianceDocId) {
-    await prisma.complianceDocument.updateMany({
+    await prisma.document.updateMany({
       where: { id: complianceDocId, accountId: entityId },
       data: { fileId: record.id },
     });

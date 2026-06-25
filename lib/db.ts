@@ -12,11 +12,14 @@ const DIRECTLY_SCOPED_MODELS = new Set([
   "Company",
   "BeneficialOwner",
   "Transaction",
-  "ComplianceDocument",
-  "ImportantDate",
+  "Document",
+  "Reminder",
+  "Mortgage",
+  "Valuation",
+  "Note",
   "FileObject",
   "BankConnection",
-  "TaxYearEstimate",
+  "TaxStatement",
   "AuditLog",
 ]);
 

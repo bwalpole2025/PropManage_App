@@ -1,17 +1,20 @@
 import { prisma } from "@/lib/db";
 import { daysUntil } from "@/lib/format";
+import { ReminderState } from "@/lib/enums";
 
 export async function getFilesAndDates(entityId: string) {
-  const [compliance, importantDates, files] = await Promise.all([
-    prisma.complianceDocument.findMany({
-      where: { accountId: entityId },
+  const [compliance, reminders, files] = await Promise.all([
+    // Compliance docs = documents that have an expiry date.
+    prisma.document.findMany({
+      where: { accountId: entityId, expiryDate: { not: null } },
       include: { property: { select: { addressLine1: true } } },
       orderBy: { expiryDate: "asc" },
     }),
-    prisma.importantDate.findMany({
-      where: { accountId: entityId },
+    // User-facing reminders (renamed from ImportantDate).
+    prisma.reminder.findMany({
+      where: { accountId: entityId, status: ReminderState.OPEN },
       include: { property: { select: { addressLine1: true } } },
-      orderBy: { date: "asc" },
+      orderBy: { dueDate: "asc" },
     }),
     prisma.fileObject.findMany({
       where: { accountId: entityId },
@@ -23,7 +26,7 @@ export async function getFilesAndDates(entityId: string) {
   // Bucket compliance by the reminder thresholds.
   const buckets = { overdue: 0, within7: 0, within14: 0, within30: 0, valid: 0 };
   for (const c of compliance) {
-    const d = daysUntil(c.expiryDate);
+    const d = daysUntil(c.expiryDate!);
     if (d < 0) buckets.overdue++;
     else if (d <= 7) buckets.within7++;
     else if (d <= 14) buckets.within14++;
@@ -31,5 +34,5 @@ export async function getFilesAndDates(entityId: string) {
     else buckets.valid++;
   }
 
-  return { compliance, importantDates, files, buckets };
+  return { compliance, reminders, files, buckets };
 }

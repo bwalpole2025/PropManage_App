@@ -85,10 +85,10 @@ export async function getDashboardData(
         },
         orderBy: { dueDate: "asc" },
       }),
-      prisma.complianceDocument.findMany({
+      prisma.document.findMany({
         where: {
           accountId: entityId,
-          expiryDate: { lte: new Date(Date.now() + 45 * 86400000) },
+          expiryDate: { not: null, lte: new Date(Date.now() + 45 * 86400000) },
         },
         include: { property: true },
         orderBy: { expiryDate: "asc" },
@@ -140,9 +140,9 @@ export async function getDashboardData(
     arrears,
     compliance: compliance.map((c) => ({
       id: c.id,
-      type: c.type,
+      type: c.category,
       propertyLabel: c.property?.addressLine1 ?? null,
-      expiryDate: c.expiryDate,
+      expiryDate: c.expiryDate!,
     })),
     tax: {
       estimatedTaxPence: estimate.estimatedTaxPence,

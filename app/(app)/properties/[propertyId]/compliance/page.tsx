@@ -9,7 +9,7 @@ import { ReminderBadge } from "@/components/shared/reminder-badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
-import { ComplianceTypeLabel } from "@/lib/enums";
+import { DocumentCategoryLabel } from "@/lib/enums";
 
 export default async function CompliancePage({
   params,
@@ -26,7 +26,7 @@ export default async function CompliancePage({
     <div className="space-y-5">
       {canManage ? <AddComplianceForm propertyId={propertyId} /> : null}
 
-      {property.complianceDocs.length === 0 ? (
+      {property.documents.length === 0 ? (
         <EmptyState
           icon={<ShieldCheck className="h-5 w-5" />}
           title="No certificates"
@@ -45,19 +45,19 @@ export default async function CompliancePage({
                 </TR>
               </THead>
               <TBody>
-                {property.complianceDocs.map((c) => (
+                {property.documents.map((c) => (
                   <TR key={c.id}>
                     <TD className="font-medium">
-                      {ComplianceTypeLabel[
-                        c.type as keyof typeof ComplianceTypeLabel
-                      ] ?? c.type}
+                      {DocumentCategoryLabel[
+                        c.category as keyof typeof DocumentCategoryLabel
+                      ] ?? c.category}
                     </TD>
                     <TD className="text-muted-foreground">
                       {c.reference ?? "—"}
                     </TD>
-                    <TD>{formatDate(c.expiryDate)}</TD>
+                    <TD>{formatDate(c.expiryDate!)}</TD>
                     <TD>
-                      <ReminderBadge date={c.expiryDate} />
+                      <ReminderBadge date={c.expiryDate!} />
                     </TD>
                   </TR>
                 ))}

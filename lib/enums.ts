@@ -114,6 +114,13 @@ export const TenancyStatus = {
   VOID: "VOID",
 } as const;
 export type TenancyStatus = (typeof TenancyStatus)[keyof typeof TenancyStatus];
+// Spec status active/vacant maps onto ACTIVE / VOID.
+export const TenancyStatusLabel: Record<TenancyStatus, string> = {
+  DRAFT: "Draft",
+  ACTIVE: "Active",
+  ENDED: "Ended",
+  VOID: "Vacant",
+};
 
 export const RentFrequency = {
   WEEKLY: "WEEKLY",
@@ -211,6 +218,50 @@ export const ComplianceTypeLabel: Record<ComplianceType, string> = {
   OTHER: "Other Certificate",
 };
 
+// General document categories (compliance kinds folded in + non-compliance docs).
+export const DocumentCategory = {
+  EPC: "EPC",
+  GAS_SAFETY: "GAS_SAFETY",
+  EICR: "EICR",
+  PAT: "PAT",
+  LEGIONELLA: "LEGIONELLA",
+  FIRE_ALARM: "FIRE_ALARM",
+  INSURANCE: "INSURANCE",
+  LICENCE_HMO: "LICENCE_HMO",
+  TENANCY_AGREEMENT: "TENANCY_AGREEMENT",
+  RECEIPT: "RECEIPT",
+  STATEMENT: "STATEMENT",
+  OTHER: "OTHER",
+} as const;
+export type DocumentCategory =
+  (typeof DocumentCategory)[keyof typeof DocumentCategory];
+export const DocumentCategoryLabel: Record<DocumentCategory, string> = {
+  EPC: "EPC (Energy Performance)",
+  GAS_SAFETY: "Gas Safety (CP12)",
+  EICR: "EICR (Electrical)",
+  PAT: "PAT Testing",
+  LEGIONELLA: "Legionella Risk Assessment",
+  FIRE_ALARM: "Fire / Smoke Alarm",
+  INSURANCE: "Landlord Insurance",
+  LICENCE_HMO: "HMO Licence",
+  TENANCY_AGREEMENT: "Tenancy Agreement",
+  RECEIPT: "Receipt",
+  STATEMENT: "Statement",
+  OTHER: "Other Document",
+};
+// Compliance certificates expire and drive reminders (subset of DocumentCategory).
+export const COMPLIANCE_CATEGORIES: DocumentCategory[] = [
+  DocumentCategory.EPC,
+  DocumentCategory.GAS_SAFETY,
+  DocumentCategory.EICR,
+  DocumentCategory.PAT,
+  DocumentCategory.LEGIONELLA,
+  DocumentCategory.FIRE_ALARM,
+  DocumentCategory.INSURANCE,
+  DocumentCategory.LICENCE_HMO,
+];
+
+// Internal materialised-reminder lifecycle (DocumentReminder scheduler).
 export const ReminderStatus = {
   PENDING: "PENDING",
   SENT: "SENT",
@@ -218,6 +269,42 @@ export const ReminderStatus = {
 } as const;
 export type ReminderStatus =
   (typeof ReminderStatus)[keyof typeof ReminderStatus];
+
+// User-facing reminder lifecycle (distinct from ReminderStatus above).
+export const ReminderState = {
+  OPEN: "OPEN",
+  COMPLETED: "COMPLETED",
+} as const;
+export type ReminderState = (typeof ReminderState)[keyof typeof ReminderState];
+export const ReminderStateLabel: Record<ReminderState, string> = {
+  OPEN: "Open",
+  COMPLETED: "Completed",
+};
+
+export const MortgageProduct = {
+  FIXED: "FIXED",
+  TRACKER: "TRACKER",
+  VARIABLE: "VARIABLE",
+  DISCOUNT: "DISCOUNT",
+  INTEREST_ONLY: "INTEREST_ONLY",
+} as const;
+export type MortgageProduct =
+  (typeof MortgageProduct)[keyof typeof MortgageProduct];
+export const MortgageProductLabel: Record<MortgageProduct, string> = {
+  FIXED: "Fixed rate",
+  TRACKER: "Tracker",
+  VARIABLE: "Standard variable",
+  DISCOUNT: "Discount",
+  INTEREST_ONLY: "Interest only",
+};
+
+export const TenancyArrearsState = {
+  CURRENT: "CURRENT",
+  ARREARS: "ARREARS",
+  CREDIT: "CREDIT",
+} as const;
+export type TenancyArrearsState =
+  (typeof TenancyArrearsState)[keyof typeof TenancyArrearsState];
 
 export const ImportantDateKind = {
   TENANCY_RENEWAL: "TENANCY_RENEWAL",

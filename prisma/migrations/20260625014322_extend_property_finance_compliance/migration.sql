@@ -191,13 +191,70 @@ CREATE TABLE "Property" (
     "purchaseDate" TIMESTAMP(3),
     "purchasePricePence" INTEGER,
     "currentValuePence" INTEGER,
+    "rentalIncomeAmountPence" INTEGER,
+    "rentalIncomeFrequency" TEXT NOT NULL DEFAULT 'MONTHLY',
     "furnished" BOOLEAN,
     "isFHL" BOOLEAN NOT NULL DEFAULT false,
+    "streetViewCameraPosition" JSONB,
+    "epcRating" TEXT,
+    "epcScore" INTEGER,
+    "epcExpiryDate" TIMESTAMP(3),
     "archivedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Property_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Mortgage" (
+    "id" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "propertyId" TEXT NOT NULL,
+    "lender" TEXT NOT NULL,
+    "productType" TEXT NOT NULL DEFAULT 'FIXED',
+    "accountNumberMasked" TEXT,
+    "balancePence" INTEGER NOT NULL,
+    "monthlyPaymentPence" INTEGER NOT NULL,
+    "interestRateBp" INTEGER NOT NULL,
+    "monthlyInterestPence" INTEGER,
+    "fixedUntil" TIMESTAMP(3),
+    "termMonths" INTEGER,
+    "currency" TEXT NOT NULL DEFAULT 'GBP',
+    "startDate" TIMESTAMP(3),
+    "archivedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Mortgage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Valuation" (
+    "id" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "propertyId" TEXT NOT NULL,
+    "amountPence" INTEGER NOT NULL,
+    "date" TIMESTAMP(3) NOT NULL,
+    "source" TEXT,
+    "currency" TEXT NOT NULL DEFAULT 'GBP',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Valuation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Note" (
+    "id" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "propertyId" TEXT,
+    "tenantId" TEXT,
+    "description" TEXT NOT NULL,
+    "date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Note_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -225,9 +282,12 @@ CREATE TABLE "Tenancy" (
     "currency" TEXT NOT NULL DEFAULT 'GBP',
     "rentFrequency" TEXT NOT NULL DEFAULT 'MONTHLY',
     "rentDueDay" INTEGER,
+    "nextPaymentDate" TIMESTAMP(3),
     "depositPence" INTEGER,
     "depositScheme" TEXT,
     "depositRef" TEXT,
+    "arrearsState" TEXT NOT NULL DEFAULT 'CURRENT',
+    "balancePence" INTEGER NOT NULL DEFAULT 0,
     "archivedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -257,14 +317,18 @@ CREATE TABLE "Transaction" (
     "amountPence" INTEGER NOT NULL,
     "currency" TEXT NOT NULL DEFAULT 'GBP',
     "date" TIMESTAMP(3) NOT NULL,
+    "rentDueDate" TIMESTAMP(3),
     "description" TEXT NOT NULL,
     "merchant" TEXT,
     "category" TEXT,
+    "subcategory" TEXT,
+    "notes" TEXT,
     "source" TEXT NOT NULL DEFAULT 'MANUAL',
     "status" TEXT NOT NULL DEFAULT 'UNRECONCILED',
     "bankTransactionId" TEXT,
     "splitParentId" TEXT,
     "attachmentFileId" TEXT,
+    "receiptDocumentId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -345,47 +409,52 @@ CREATE TABLE "BankTransaction" (
 );
 
 -- CreateTable
-CREATE TABLE "ComplianceDocument" (
+CREATE TABLE "Document" (
     "id" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
     "propertyId" TEXT,
-    "type" TEXT NOT NULL,
+    "tenancyId" TEXT,
+    "category" TEXT NOT NULL,
     "issuedDate" TIMESTAMP(3),
-    "expiryDate" TIMESTAMP(3) NOT NULL,
+    "expiryDate" TIMESTAMP(3),
     "reference" TEXT,
     "fileId" TEXT,
     "reminderOffsetsDays" INTEGER[] DEFAULT ARRAY[30, 14, 7, 1]::INTEGER[],
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "ComplianceDocument_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Document_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "ComplianceReminder" (
+CREATE TABLE "DocumentReminder" (
     "id" TEXT NOT NULL,
-    "complianceDocumentId" TEXT NOT NULL,
+    "documentId" TEXT NOT NULL,
     "fireOn" TIMESTAMP(3) NOT NULL,
     "offsetDays" INTEGER NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'PENDING',
     "sentAt" TIMESTAMP(3),
 
-    CONSTRAINT "ComplianceReminder_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "DocumentReminder_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "ImportantDate" (
+CREATE TABLE "Reminder" (
     "id" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
     "propertyId" TEXT,
     "tenancyId" TEXT,
-    "title" TEXT NOT NULL,
-    "date" TIMESTAMP(3) NOT NULL,
+    "documentId" TEXT,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "dueDate" TIMESTAMP(3) NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'OPEN',
     "kind" TEXT NOT NULL DEFAULT 'CUSTOM',
-    "notes" TEXT,
+    "completedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "ImportantDate_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Reminder_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -405,9 +474,11 @@ CREATE TABLE "FileObject" (
 );
 
 -- CreateTable
-CREATE TABLE "TaxYearEstimate" (
+CREATE TABLE "TaxStatement" (
     "id" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
+    "portfolioId" TEXT,
+    "beneficialOwnerId" TEXT,
     "taxYearStart" TIMESTAMP(3) NOT NULL,
     "taxYearLabel" TEXT NOT NULL,
     "computedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -421,7 +492,7 @@ CREATE TABLE "TaxYearEstimate" (
     "taxableProfitPence" INTEGER NOT NULL,
     "estimatedTaxPence" INTEGER,
 
-    CONSTRAINT "TaxYearEstimate_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "TaxStatement_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -531,6 +602,27 @@ CREATE INDEX "Property_accountId_idx" ON "Property"("accountId");
 CREATE INDEX "Property_portfolioId_idx" ON "Property"("portfolioId");
 
 -- CreateIndex
+CREATE INDEX "Mortgage_accountId_idx" ON "Mortgage"("accountId");
+
+-- CreateIndex
+CREATE INDEX "Mortgage_propertyId_idx" ON "Mortgage"("propertyId");
+
+-- CreateIndex
+CREATE INDEX "Valuation_accountId_idx" ON "Valuation"("accountId");
+
+-- CreateIndex
+CREATE INDEX "Valuation_propertyId_date_idx" ON "Valuation"("propertyId", "date");
+
+-- CreateIndex
+CREATE INDEX "Note_accountId_idx" ON "Note"("accountId");
+
+-- CreateIndex
+CREATE INDEX "Note_propertyId_idx" ON "Note"("propertyId");
+
+-- CreateIndex
+CREATE INDEX "Note_tenantId_idx" ON "Note"("tenantId");
+
+-- CreateIndex
 CREATE INDEX "PropertyOwnership_propertyId_idx" ON "PropertyOwnership"("propertyId");
 
 -- CreateIndex
@@ -579,25 +671,31 @@ CREATE UNIQUE INDEX "BankTransaction_providerTxnId_key" ON "BankTransaction"("pr
 CREATE INDEX "BankTransaction_bankAccountId_date_idx" ON "BankTransaction"("bankAccountId", "date");
 
 -- CreateIndex
-CREATE INDEX "ComplianceDocument_accountId_idx" ON "ComplianceDocument"("accountId");
+CREATE INDEX "Document_accountId_idx" ON "Document"("accountId");
 
 -- CreateIndex
-CREATE INDEX "ComplianceDocument_expiryDate_idx" ON "ComplianceDocument"("expiryDate");
+CREATE INDEX "Document_expiryDate_idx" ON "Document"("expiryDate");
 
 -- CreateIndex
-CREATE INDEX "ComplianceReminder_complianceDocumentId_idx" ON "ComplianceReminder"("complianceDocumentId");
+CREATE INDEX "DocumentReminder_documentId_idx" ON "DocumentReminder"("documentId");
 
 -- CreateIndex
-CREATE INDEX "ComplianceReminder_fireOn_status_idx" ON "ComplianceReminder"("fireOn", "status");
+CREATE INDEX "DocumentReminder_fireOn_status_idx" ON "DocumentReminder"("fireOn", "status");
 
 -- CreateIndex
-CREATE INDEX "ImportantDate_accountId_date_idx" ON "ImportantDate"("accountId", "date");
+CREATE INDEX "Reminder_accountId_dueDate_idx" ON "Reminder"("accountId", "dueDate");
+
+-- CreateIndex
+CREATE INDEX "Reminder_dueDate_status_idx" ON "Reminder"("dueDate", "status");
 
 -- CreateIndex
 CREATE INDEX "FileObject_accountId_idx" ON "FileObject"("accountId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "TaxYearEstimate_accountId_taxYearStart_key" ON "TaxYearEstimate"("accountId", "taxYearStart");
+CREATE INDEX "TaxStatement_accountId_idx" ON "TaxStatement"("accountId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TaxStatement_accountId_portfolioId_beneficialOwnerId_taxYea_key" ON "TaxStatement"("accountId", "portfolioId", "beneficialOwnerId", "taxYearStart");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "MtdConnection_accountId_key" ON "MtdConnection"("accountId");
@@ -666,6 +764,27 @@ ALTER TABLE "Property" ADD CONSTRAINT "Property_accountId_fkey" FOREIGN KEY ("ac
 ALTER TABLE "Property" ADD CONSTRAINT "Property_portfolioId_fkey" FOREIGN KEY ("portfolioId") REFERENCES "Portfolio"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Mortgage" ADD CONSTRAINT "Mortgage_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Mortgage" ADD CONSTRAINT "Mortgage_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Valuation" ADD CONSTRAINT "Valuation_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Valuation" ADD CONSTRAINT "Valuation_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Note" ADD CONSTRAINT "Note_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Note" ADD CONSTRAINT "Note_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Note" ADD CONSTRAINT "Note_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "PropertyOwnership" ADD CONSTRAINT "PropertyOwnership_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -696,6 +815,9 @@ ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_splitParentId_fkey" FOREIG
 ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_attachmentFileId_fkey" FOREIGN KEY ("attachmentFileId") REFERENCES "FileObject"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_receiptDocumentId_fkey" FOREIGN KEY ("receiptDocumentId") REFERENCES "Document"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "RentScheduleEntry" ADD CONSTRAINT "RentScheduleEntry_tenancyId_fkey" FOREIGN KEY ("tenancyId") REFERENCES "Tenancy"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -714,22 +836,31 @@ ALTER TABLE "BankAccount" ADD CONSTRAINT "BankAccount_bankConnectionId_fkey" FOR
 ALTER TABLE "BankTransaction" ADD CONSTRAINT "BankTransaction_bankAccountId_fkey" FOREIGN KEY ("bankAccountId") REFERENCES "BankAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Document" ADD CONSTRAINT "Document_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Document" ADD CONSTRAINT "Document_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_fileId_fkey" FOREIGN KEY ("fileId") REFERENCES "FileObject"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Document" ADD CONSTRAINT "Document_tenancyId_fkey" FOREIGN KEY ("tenancyId") REFERENCES "Tenancy"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ComplianceReminder" ADD CONSTRAINT "ComplianceReminder_complianceDocumentId_fkey" FOREIGN KEY ("complianceDocumentId") REFERENCES "ComplianceDocument"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Document" ADD CONSTRAINT "Document_fileId_fkey" FOREIGN KEY ("fileId") REFERENCES "FileObject"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ImportantDate" ADD CONSTRAINT "ImportantDate_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "DocumentReminder" ADD CONSTRAINT "DocumentReminder_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "Document"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ImportantDate" ADD CONSTRAINT "ImportantDate_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Reminder" ADD CONSTRAINT "Reminder_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Reminder" ADD CONSTRAINT "Reminder_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Reminder" ADD CONSTRAINT "Reminder_tenancyId_fkey" FOREIGN KEY ("tenancyId") REFERENCES "Tenancy"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Reminder" ADD CONSTRAINT "Reminder_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "Document"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "FileObject" ADD CONSTRAINT "FileObject_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -741,7 +872,13 @@ ALTER TABLE "FileObject" ADD CONSTRAINT "FileObject_propertyId_fkey" FOREIGN KEY
 ALTER TABLE "FileObject" ADD CONSTRAINT "FileObject_uploadedByUserId_fkey" FOREIGN KEY ("uploadedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "TaxYearEstimate" ADD CONSTRAINT "TaxYearEstimate_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "TaxStatement" ADD CONSTRAINT "TaxStatement_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TaxStatement" ADD CONSTRAINT "TaxStatement_portfolioId_fkey" FOREIGN KEY ("portfolioId") REFERENCES "Portfolio"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TaxStatement" ADD CONSTRAINT "TaxStatement_beneficialOwnerId_fkey" FOREIGN KEY ("beneficialOwnerId") REFERENCES "BeneficialOwner"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MtdConnection" ADD CONSTRAINT "MtdConnection_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -755,6 +892,5 @@ ALTER TABLE "MtdSubmission" ADD CONSTRAINT "MtdSubmission_mtdConnectionId_fkey" 
 -- AddForeignKey
 ALTER TABLE "MtdSubmission" ADD CONSTRAINT "MtdSubmission_obligationId_fkey" FOREIGN KEY ("obligationId") REFERENCES "MtdObligation"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- One default ('Personal — Default') portfolio per account (partial unique index;
--- not expressible in the Prisma schema, so added here).
+-- One default ('Personal — Default') portfolio per account (partial unique index).
 CREATE UNIQUE INDEX "Portfolio_one_default" ON "Portfolio"("accountId") WHERE "isDefault";

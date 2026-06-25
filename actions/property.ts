@@ -6,7 +6,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { poundsToPence } from "@/lib/format";
 import {
-  ComplianceType,
+  DocumentCategory,
   DepositScheme,
   PropertyType,
   RentFrequency,
@@ -112,7 +112,7 @@ export async function createTenancyAction(formData: FormData) {
 
 const complianceSchema = z.object({
   propertyId: z.string().min(1),
-  type: z.string(),
+  category: z.string(),
   expiryDate: z.string().min(1),
   reference: z.string().optional(),
 });
@@ -133,11 +133,11 @@ export async function addComplianceDocAction(formData: FormData) {
 
   const offsets = [30, 14, 7, 1];
   const expiry = new Date(d.expiryDate);
-  await prisma.complianceDocument.create({
+  await prisma.document.create({
     data: {
       accountId: entityId,
       propertyId: d.propertyId,
-      type: (d.type as ComplianceType) ?? ComplianceType.OTHER,
+      category: (d.category as DocumentCategory) ?? DocumentCategory.OTHER,
       expiryDate: expiry,
       reference: d.reference || null,
       reminderOffsetsDays: offsets,

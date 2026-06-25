@@ -10,7 +10,7 @@ import type { JobPayloads } from "../types";
 export async function sendComplianceReminders(
   data: JobPayloads["sendComplianceReminders"],
 ) {
-  const due = await prisma.complianceReminder.findMany({
+  const due = await prisma.documentReminder.findMany({
     where: {
       status: ReminderStatus.PENDING,
       fireOn: { lte: new Date() },
@@ -25,13 +25,13 @@ export async function sendComplianceReminders(
   for (const r of due) {
     // In production this would dispatch via the EmailSender; here we log.
     console.log(
-      `[jobs] reminder: ${r.document.type} expires ${r.document.expiryDate
-        .toISOString()
+      `[jobs] reminder: ${r.document.category} expires ${r.document.expiryDate
+        ?.toISOString()
         .slice(0, 10)} (${r.offsetDays}d notice) for ${
         r.document.property?.addressLine1 ?? "portfolio"
       }`,
     );
-    await prisma.complianceReminder.update({
+    await prisma.documentReminder.update({
       where: { id: r.id },
       data: { status: ReminderStatus.SENT, sentAt: new Date() },
     });

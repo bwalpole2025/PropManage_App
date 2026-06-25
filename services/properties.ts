@@ -28,8 +28,10 @@ export async function listProperties(
           },
         },
       },
-      complianceDocs: {
-        where: { expiryDate: { lte: new Date(Date.now() + 30 * 86400000) } },
+      documents: {
+        where: {
+          expiryDate: { not: null, lte: new Date(Date.now() + 30 * 86400000) },
+        },
         select: { id: true },
       },
     },
@@ -55,7 +57,7 @@ export async function listProperties(
       activeTenancies: active.length,
       monthlyRentPence: monthly,
       hasArrears,
-      complianceDueSoon: p.complianceDocs.length,
+      complianceDueSoon: p.documents.length,
     };
   });
 }
@@ -70,7 +72,10 @@ export async function getProperty(entityId: string, propertyId: string) {
         orderBy: { startDate: "desc" },
       },
       transactions: { orderBy: { date: "desc" }, take: 10 },
-      complianceDocs: { orderBy: { expiryDate: "asc" } },
+      documents: {
+        where: { expiryDate: { not: null } },
+        orderBy: { expiryDate: "asc" },
+      },
       ownerships: { include: { beneficialOwner: true } },
     },
   });
@@ -85,7 +90,7 @@ export async function getProperty(entityId: string, propertyId: string) {
 
   return {
     ...property,
-    reminderOffsets: property.complianceDocs.map((c) => c.reminderOffsetsDays),
+    reminderOffsets: property.documents.map((c) => c.reminderOffsetsDays),
     summary: { incomePence, expensePence },
   };
 }

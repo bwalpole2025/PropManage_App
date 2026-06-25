@@ -6,7 +6,11 @@ import { addComplianceDocAction } from "@/actions/property";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { ComplianceType, ComplianceTypeLabel } from "@/lib/enums";
+import {
+  COMPLIANCE_CATEGORIES,
+  DocumentCategory,
+  DocumentCategoryLabel,
+} from "@/lib/enums";
 
 export function AddComplianceForm({ propertyId }: { propertyId: string }) {
   const [open, setOpen] = useState(false);
@@ -42,11 +46,15 @@ export function AddComplianceForm({ propertyId }: { propertyId: string }) {
           <input type="hidden" name="propertyId" value={propertyId} />
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="type">Type</Label>
-              <Select id="type" name="type" defaultValue={ComplianceType.GAS_SAFETY}>
-                {Object.values(ComplianceType).map((t) => (
+              <Label htmlFor="category">Type</Label>
+              <Select
+                id="category"
+                name="category"
+                defaultValue={DocumentCategory.GAS_SAFETY}
+              >
+                {COMPLIANCE_CATEGORIES.map((t) => (
                   <option key={t} value={t}>
-                    {ComplianceTypeLabel[t]}
+                    {DocumentCategoryLabel[t]}
                   </option>
                 ))}
               </Select>

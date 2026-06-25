@@ -10,13 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatDate, relativeDays } from "@/lib/format";
 import {
-  ComplianceTypeLabel,
+  DocumentCategoryLabel,
   ImportantDateKindLabel,
 } from "@/lib/enums";
 
 export default async function FilesPage() {
   const ctx = await getActiveContext();
-  const { compliance, importantDates, files, buckets } =
+  const { compliance, reminders, files, buckets } =
     await getFilesAndDates(ctx.entityId);
 
   return (
@@ -74,17 +74,17 @@ export default async function FilesPage() {
                 {compliance.map((c) => (
                   <TR key={c.id}>
                     <TD className="font-medium">
-                      {ComplianceTypeLabel[
-                        c.type as keyof typeof ComplianceTypeLabel
-                      ] ?? c.type}
+                      {DocumentCategoryLabel[
+                        c.category as keyof typeof DocumentCategoryLabel
+                      ] ?? c.category}
                     </TD>
                     <TD className="text-muted-foreground">
                       {c.property?.addressLine1 ?? "Portfolio-wide"}
                     </TD>
                     <TD className="text-muted-foreground">{c.reference ?? "—"}</TD>
-                    <TD>{formatDate(c.expiryDate)}</TD>
+                    <TD>{formatDate(c.expiryDate!)}</TD>
                     <TD>
-                      <ReminderBadge date={c.expiryDate} />
+                      <ReminderBadge date={c.expiryDate!} />
                     </TD>
                   </TR>
                 ))}
@@ -103,23 +103,23 @@ export default async function FilesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {importantDates.length === 0 ? (
+            {reminders.length === 0 ? (
               <EmptyState
                 title="No dates"
                 description="Renewals, rent reviews and mortgage dates show here."
               />
             ) : (
               <ul className="divide-y divide-border">
-                {importantDates.map((d) => (
+                {reminders.map((d) => (
                   <li
                     key={d.id}
                     className="flex items-center justify-between py-3"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{d.title}</p>
+                      <p className="truncate text-sm font-medium">{d.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {d.property?.addressLine1 ?? "Portfolio"} ·{" "}
-                        {formatDate(d.date)}
+                        {formatDate(d.dueDate)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -129,7 +129,7 @@ export default async function FilesPage() {
                         ] ?? d.kind}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        {relativeDays(d.date)}
+                        {relativeDays(d.dueDate)}
                       </span>
                     </div>
                   </li>
