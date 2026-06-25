@@ -1,10 +1,11 @@
-import Link from "next/link";
-import { Building2 } from "lucide-react";
+import { cookies } from "next/headers";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { prisma } from "@/lib/db";
-import { SidebarNav } from "@/components/layout/sidebar";
-import { OrgSwitcher } from "@/components/layout/org-switcher";
-import { UserMenu } from "@/components/layout/user-menu";
+import { SIDEBAR_COOKIE } from "@/components/layout/nav-config";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { TrialBanner } from "@/components/layout/trial-banner";
+import { HelpFab } from "@/components/layout/help-fab";
 import { VerifyEmailBanner } from "@/components/shared/verify-email-banner";
 
 export default async function AppLayout({
@@ -13,50 +14,50 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const ctx = await getActiveContext();
-  const account = await prisma.user.findUnique({
-    where: { id: ctx.user.id },
-    select: { emailVerified: true },
-  });
-  const unverified = !account?.emailVerified;
+  const [user, account, cookieStore] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: ctx.user.id },
+      select: { emailVerified: true },
+    }),
+    prisma.account.findUnique({
+      where: { id: ctx.entityId },
+      select: { subscriptionStatus: true, trialEndsAt: true },
+    }),
+    cookies(),
+  ]);
+  const unverified = !user?.emailVerified;
+  const collapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "1";
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card lg:flex">
-        <div className="flex h-16 items-center gap-2 border-b border-border px-5">
-          <Building2 className="h-6 w-6 text-primary" />
-          <Link href="/dashboard" className="text-lg font-semibold">
-            PropManage
-          </Link>
-        </div>
-        <div className="border-b border-border p-3">
-          <OrgSwitcher memberships={ctx.memberships} activeId={ctx.entityId} />
-        </div>
-        <div className="flex-1 overflow-y-auto p-3">
-          <SidebarNav />
-        </div>
-        <div className="border-t border-border p-4 text-xs text-muted-foreground">
-          Estimates are not tax advice.
-        </div>
-      </aside>
+      <AppSidebar
+        defaultCollapsed={collapsed}
+        memberships={ctx.memberships}
+        activeId={ctx.entityId}
+        userEmail={ctx.user.email ?? ""}
+        userName={ctx.user.name ?? ""}
+        accountName={ctx.entityName}
+      />
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
-          <div className="min-w-0">
-            <p className="truncate text-sm text-muted-foreground">
-              {ctx.entityName}
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <UserMenu name={ctx.user.name} email={ctx.user.email} />
-          </div>
+        <header className="flex h-16 items-center border-b border-border bg-card px-6">
+          <Breadcrumbs />
         </header>
+        <TrialBanner
+          subscriptionStatus={account?.subscriptionStatus ?? "active"}
+          trialEndsAt={
+            account?.trialEndsAt ? account.trialEndsAt.toISOString() : null
+          }
+          accountId={ctx.entityId}
+        />
         {unverified ? <VerifyEmailBanner /> : null}
         <main className="flex-1 overflow-y-auto p-6">
           <div className="mx-auto max-w-6xl">{children}</div>
         </main>
       </div>
+
+      <HelpFab />
     </div>
   );
 }

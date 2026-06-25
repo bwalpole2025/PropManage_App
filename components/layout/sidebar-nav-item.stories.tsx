@@ -21,3 +21,15 @@ export const Nav: Story = {
     </div>
   ),
 };
+
+export const Collapsed: Story = {
+  render: () => (
+    <div className="w-16 rounded-lg border border-border bg-card p-2">
+      <nav className="flex flex-col gap-1">
+        <SidebarNavItem href="#" label="Dashboard" icon={LayoutDashboard} active collapsed />
+        <SidebarNavItem href="#" label="My Properties" icon={Building2} collapsed />
+        <SidebarNavItem href="#" label="Tax" icon={Calculator} collapsed />
+      </nav>
+    </div>
+  ),
+};

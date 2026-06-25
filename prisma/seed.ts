@@ -124,7 +124,9 @@ async function main() {
       type: LandlordType.INDIVIDUAL,
       utr: "1234567890",
       mtdEnrolled: true,
-      subscriptionStatus: "active",
+      // On a free trial so the global trial banner shows "N days left".
+      subscriptionStatus: "trialing",
+      trialEndsAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
       firstTaxYear: "2024-25",
       timeZone: "Europe/London",
       principalUserId: landlord.id,
