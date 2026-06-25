@@ -164,3 +164,36 @@ export interface TaxEstimationService {
 
   toPropertyIncomeSummary(result: TaxEstimateResult): PropertyIncomeSummary;
 }
+
+// ---------------------------------------------------------------------------
+// Spec-aligned provider names. The original interface names are kept as
+// aliases so existing imports keep working.
+// ---------------------------------------------------------------------------
+
+export type BankFeedProvider = BankFeedService;
+export type HmrcMtdProvider = HmrcMtdService;
+
+// ---------------------------------------------------------------------------
+// 4. DocumentStorage — S3-compatible object storage for documents & receipts
+// ---------------------------------------------------------------------------
+
+export interface PutResult {
+  key: string;
+  sizeBytes: number;
+}
+
+export interface DocumentStorage {
+  readonly driverName: string;
+  /** Store bytes under a key; returns the canonical key + size. */
+  put(
+    key: string,
+    bytes: Uint8Array | Buffer,
+    contentType: string,
+  ): Promise<PutResult>;
+  /** A time-limited URL to fetch the object (S3 presigned / local route). */
+  getSignedUrl(key: string, ttlSeconds: number): Promise<string>;
+  /** Read raw bytes (used by the local download route for the mock driver). */
+  getBytes(key: string): Promise<Uint8Array>;
+  delete(key: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
+}

@@ -9,9 +9,12 @@
 
 import { MockBankFeedService } from "./mock/bankFeed";
 import { MockHmrcMtdService } from "./mock/hmrcMtd";
+import { MockDocumentStorage } from "./mock/documentStorage";
+import { S3Storage } from "./real/documentStorage";
 import { DefaultTaxEstimationService } from "./taxEstimation";
 import type {
   BankFeedService,
+  DocumentStorage,
   HmrcMtdService,
   TaxEstimationService,
 } from "./types";
@@ -35,14 +38,31 @@ function makeHmrc(): HmrcMtdService {
   return new MockHmrcMtdService();
 }
 
+function makeStorage(): DocumentStorage {
+  // Storage is NOT forced to mock by SERVICE_MODE — a real S3 bucket is fine in
+  // any environment. Opt in explicitly via STORAGE_DRIVER=s3.
+  const driver = process.env.STORAGE_DRIVER ?? "mock";
+  if (driver === "s3") return new S3Storage();
+  return new MockDocumentStorage();
+}
+
 export const services: {
   bankFeed: BankFeedService;
   hmrc: HmrcMtdService;
   tax: TaxEstimationService;
+  storage: DocumentStorage;
 } = {
   bankFeed: makeBankFeed(),
   hmrc: makeHmrc(),
   tax: new DefaultTaxEstimationService(),
+  storage: makeStorage(),
 };
 
-export type { BankFeedService, HmrcMtdService, TaxEstimationService } from "./types";
+export type {
+  BankFeedService,
+  BankFeedProvider,
+  HmrcMtdService,
+  HmrcMtdProvider,
+  TaxEstimationService,
+  DocumentStorage,
+} from "./types";
