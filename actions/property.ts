@@ -14,36 +14,42 @@ import {
 } from "@/lib/enums";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
+import {
+  propertyCreateSchema,
+  type PropertyCreateInput,
+} from "@/schemas/property";
 
-const propertySchema = z.object({
-  addressLine1: z.string().min(1, "Address is required"),
-  addressLine2: z.string().optional(),
-  city: z.string().min(1, "City is required"),
-  postcode: z.string().min(1, "Postcode is required"),
-  propertyType: z.string(),
-  bedrooms: z.string().optional(),
-});
+/**
+ * Shared create logic — called by BOTH the server action below and the tRPC
+ * `properties.create` mutation. Pure persistence; no redirect/revalidate so the
+ * tRPC client can invalidate its own cache.
+ */
+export async function createPropertyCore(
+  entityId: string,
+  input: PropertyCreateInput,
+) {
+  return prisma.property.create({
+    data: {
+      landlordEntityId: entityId,
+      addressLine1: input.addressLine1,
+      addressLine2: input.addressLine2 || null,
+      city: input.city,
+      postcode: input.postcode,
+      propertyType: input.propertyType ?? PropertyType.FLAT,
+      bedrooms: input.bedrooms ?? null,
+    },
+  });
+}
 
 export async function createPropertyAction(formData: FormData) {
   const { entityId } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_PROPERTIES);
 
-  const parsed = propertySchema.safeParse(Object.fromEntries(formData));
+  const parsed = propertyCreateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid property");
   }
-  const d = parsed.data;
-  const property = await prisma.property.create({
-    data: {
-      landlordEntityId: entityId,
-      addressLine1: d.addressLine1,
-      addressLine2: d.addressLine2 || null,
-      city: d.city,
-      postcode: d.postcode,
-      propertyType: (d.propertyType as PropertyType) ?? PropertyType.FLAT,
-      bedrooms: d.bedrooms ? Number.parseInt(d.bedrooms, 10) : null,
-    },
-  });
+  const property = await createPropertyCore(entityId, parsed.data);
 
   revalidatePath("/properties");
   revalidatePath("/dashboard");

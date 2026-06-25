@@ -1,16 +1,9 @@
 import Link from "next/link";
-import {
-  TrendingUp,
-  TrendingDown,
-  Wallet,
-  AlertTriangle,
-  Calculator,
-  ShieldCheck,
-} from "lucide-react";
+import { AlertTriangle, Calculator, ShieldCheck } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { getDashboardData } from "@/services/dashboard";
 import { PageHeader } from "@/components/shared/page-header";
-import { StatTile } from "@/components/shared/stat-tile";
+import { DashboardKpis } from "./dashboard-kpis";
 import { OnboardingChecklist } from "@/components/shared/onboarding-checklist";
 import { DisclaimerBanner } from "@/components/shared/disclaimer-banner";
 import { ReminderBadge } from "@/components/shared/reminder-badge";
@@ -65,37 +58,8 @@ export default async function DashboardPage() {
         description={`Overview for ${ctx.entityName} · tax year ${data.taxYear}`}
       />
 
-      {/* KPI tiles */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          label="Rental income"
-          value={formatPenceCompact(data.kpis.incomePence)}
-          hint="This tax year to date"
-          accent="success"
-          icon={<TrendingUp className="h-4 w-4" />}
-        />
-        <StatTile
-          label="Expenses"
-          value={formatPenceCompact(data.kpis.expensesPence)}
-          hint="This tax year to date"
-          accent="neutral"
-          icon={<TrendingDown className="h-4 w-4" />}
-        />
-        <StatTile
-          label="Net position"
-          value={formatPenceCompact(data.kpis.netPence)}
-          hint="Income minus expenses"
-          accent={data.kpis.netPence >= 0 ? "primary" : "danger"}
-          icon={<Wallet className="h-4 w-4" />}
-        />
-        <StatTile
-          label="Rent arrears"
-          value={formatPenceCompact(data.kpis.arrearsPence)}
-          hint={`${data.arrears.length} period(s) outstanding`}
-          accent={data.kpis.arrearsPence > 0 ? "danger" : "success"}
-          icon={<AlertTriangle className="h-4 w-4" />}
-        />
-      </div>
+      {/* KPI tiles — client-rendered via tRPC + TanStack Query */}
+      <DashboardKpis />
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Onboarding + alerts */}
