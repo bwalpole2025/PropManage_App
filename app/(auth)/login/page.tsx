@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { LoginForm } from "./login-form";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reset?: string }>;
+}) {
+  const { reset } = await searchParams;
   return (
     <div>
       <div className="mb-6">
@@ -11,7 +16,22 @@ export default function LoginPage() {
         </p>
       </div>
 
+      {reset ? (
+        <p className="mb-4 rounded-md bg-success/10 px-3 py-2 text-sm text-success">
+          Password updated — sign in with your new password.
+        </p>
+      ) : null}
+
       <LoginForm />
+
+      <div className="mt-3 text-right">
+        <Link
+          href="/forgot-password"
+          className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+        >
+          Forgot password?
+        </Link>
+      </div>
 
       <p className="mt-6 text-sm text-muted-foreground">
         New to PropManage?{" "}

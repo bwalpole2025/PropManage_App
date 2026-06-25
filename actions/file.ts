@@ -34,7 +34,7 @@ export async function uploadFileAction(formData: FormData) {
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
-  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+  const safeName = file.name.replace(/[^\w.-]+/g, "_");
   const key = `${entityId}/${randomUUID()}-${safeName}`;
   const { sizeBytes } = await services.storage.put(
     key,

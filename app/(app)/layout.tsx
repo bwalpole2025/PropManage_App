@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
+import { prisma } from "@/lib/db";
 import { SidebarNav } from "@/components/layout/sidebar";
 import { OrgSwitcher } from "@/components/layout/org-switcher";
 import { UserMenu } from "@/components/layout/user-menu";
+import { VerifyEmailBanner } from "@/components/shared/verify-email-banner";
 
 export default async function AppLayout({
   children,
@@ -11,6 +13,11 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const ctx = await getActiveContext();
+  const account = await prisma.user.findUnique({
+    where: { id: ctx.user.id },
+    select: { emailVerified: true },
+  });
+  const unverified = !account?.emailVerified;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -45,6 +52,7 @@ export default async function AppLayout({
             <UserMenu name={ctx.user.name} email={ctx.user.email} />
           </div>
         </header>
+        {unverified ? <VerifyEmailBanner /> : null}
         <main className="flex-1 overflow-y-auto p-6">
           <div className="mx-auto max-w-6xl">{children}</div>
         </main>

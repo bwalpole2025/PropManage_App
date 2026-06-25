@@ -10,6 +10,7 @@ export function SettingsTabs() {
     { href: "/settings", label: "Profile" },
     { href: "/settings/organization", label: "Organisation" },
     { href: "/settings/team", label: "Team & access" },
+    { href: "/settings/security", label: "Security" },
   ];
   return (
     <div className="flex gap-1 border-b border-border">

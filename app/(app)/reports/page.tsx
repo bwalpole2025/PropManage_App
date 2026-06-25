@@ -1,4 +1,4 @@
-import { BarChart3, FileSpreadsheet, PieChart, Building2 } from "lucide-react";
+import { FileSpreadsheet, PieChart, Building2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ComingSoon } from "@/components/shared/coming-soon";
 import { Card, CardContent } from "@/components/ui/card";

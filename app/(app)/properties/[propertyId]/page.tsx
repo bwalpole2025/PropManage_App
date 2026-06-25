@@ -6,7 +6,6 @@ import { StatTile } from "@/components/shared/stat-tile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CurrencyValue } from "@/components/shared/currency-value";
 import { ReminderBadge } from "@/components/shared/reminder-badge";
-import { Badge } from "@/components/ui/badge";
 import { formatDate, formatPenceCompact } from "@/lib/format";
 import { ComplianceTypeLabel } from "@/lib/enums";
 import { Sa105CategoryLabel, isSa105Category } from "@/lib/sa105";
