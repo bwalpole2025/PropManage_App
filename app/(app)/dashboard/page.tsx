@@ -81,7 +81,11 @@ export default async function DashboardPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <ProfitLossWidget pnl={data.pnl} className="sm:col-span-2" />
+        <ProfitLossWidget
+          pnl={data.pnl}
+          taxYearLabel={data.taxYear}
+          className="sm:col-span-2"
+        />
         <OccupancyWidget occupancy={data.occupancy} />
         <AssetAnalysisWidget asset={data.asset} />
         <RentCollectionWidget data={data.rentCollection} locked={locked} />

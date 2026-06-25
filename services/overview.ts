@@ -1,27 +1,24 @@
 import { prisma } from "@/lib/db";
 import { RentFrequency, TenancyStatus, TxnDirection, TxnStatus } from "@/lib/enums";
-import { annualisedRentPence, annualYieldBp, loanToValueBp } from "@/lib/finance";
+import { annualisedRentPence } from "@/lib/finance";
+import { taxYearLabelFor, taxYearStartDate } from "@/lib/format";
+import {
+  computeAsset,
+  computeMarketRisk,
+  computePnl,
+  computeYields,
+  type AssetResult,
+  type MarketRiskResult,
+  type PnlResult,
+  type YieldsResult,
+} from "@/lib/portfolio";
 import { getDashboardData, type DashboardData } from "./dashboard";
 
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 export interface OverviewData extends DashboardData {
-  pnl: {
-    incomePence: number;
-    expensesPence: number;
-    profitPence: number;
-    hasTransactions: boolean;
-  };
-  asset: {
-    ltvBp: number | null; // mortgaged-property LTV (Σ balances / Σ values of mortgaged props)
-    portfolioValuePence: number;
-    portfolioLtvBp: number | null; // Σ balances / Σ all values
-    valuationCoveragePct: number;
-    purchasePriceCoveragePct: number;
-    mortgageCoveragePct: number;
-    portfolioDataPct: number; // composite of the three coverages
-    totalProperties: number;
-  };
+  pnl: PnlResult & { hasTransactions: boolean };
+  asset: AssetResult;
   occupancy: {
     occupiedCount: number;
     vacantCount: number;
@@ -43,16 +40,8 @@ export interface OverviewData extends DashboardData {
     collectedPct: number;
     hasSchedule: boolean;
   };
-  yields: {
-    perProperty: { propertyId: string; label: string; yieldBp: number | null }[];
-    portfolioYieldBp: number | null;
-  };
-  marketRisk: {
-    voidRatePct: number;
-    arrearsRatePct: number;
-    avgLtvBp: number | null;
-    level: "low" | "medium" | "high";
-  };
+  yields: YieldsResult;
+  marketRisk: MarketRiskResult;
 }
 
 export async function getOverviewData(
@@ -69,18 +58,20 @@ export async function getOverviewData(
     txns,
     properties,
     mortgages,
-    valuationProps,
     activeTenancies,
     upcomingRows,
     collectionRows,
+    rentalPaymentCount,
   ] = await Promise.all([
+    // Categorised, non-excluded transactions in the last 12 months.
     prisma.transaction.findMany({
       where: {
         accountId: entityId,
         date: { gte: yearAgo },
         status: { not: TxnStatus.EXCLUDED },
+        category: { not: null },
       },
-      select: { direction: true, amountPence: true },
+      select: { direction: true, amountPence: true, date: true },
     }),
     prisma.property.findMany({
       where: { accountId: entityId },
@@ -95,11 +86,6 @@ export async function getOverviewData(
     prisma.mortgage.findMany({
       where: { accountId: entityId, archivedAt: null },
       select: { propertyId: true, balancePence: true },
-    }),
-    prisma.valuation.findMany({
-      where: { accountId: entityId },
-      select: { propertyId: true },
-      distinct: ["propertyId"],
     }),
     prisma.tenancy.findMany({
       where: { property: { accountId: entityId }, status: TenancyStatus.ACTIVE },
@@ -131,67 +117,33 @@ export async function getOverviewData(
       },
       select: { expectedPence: true, receivedPence: true },
     }),
+    // A rental payment of ANY age unlocks the yields widget.
+    prisma.transaction.count({
+      where: {
+        accountId: entityId,
+        direction: TxnDirection.INCOME,
+        status: { not: TxnStatus.EXCLUDED },
+      },
+    }),
   ]);
 
-  // --- Profit & Loss (last 12 months) ---
-  const incomePence = txns
-    .filter((t) => t.direction === TxnDirection.INCOME)
-    .reduce((s, t) => s + t.amountPence, 0);
-  const expensesPence = txns
-    .filter((t) => t.direction === TxnDirection.EXPENSE)
-    .reduce((s, t) => s + t.amountPence, 0);
+  const taxYearLabel = taxYearLabelFor();
+  const taxYearStart = taxYearStartDate(taxYearLabel);
+
+  // --- Profit & Loss (last 12 months + current tax year) ---
   const pnl = {
-    incomePence,
-    expensesPence,
-    profitPence: incomePence - expensesPence,
+    ...computePnl(txns, { taxYearStart }),
     hasTransactions: dashboard.onboarding.hasTransaction,
   };
 
-  // --- Asset analysis ---
-  const totalProperties = properties.length;
-  const portfolioValuePence = properties.reduce(
-    (s, p) => s + (p.currentValuePence ?? 0),
-    0,
-  );
-  const balanceByProp = new Map<string, number>();
-  for (const m of mortgages) {
-    balanceByProp.set(
-      m.propertyId,
-      (balanceByProp.get(m.propertyId) ?? 0) + m.balancePence,
-    );
-  }
-  const totalBalance = mortgages.reduce((s, m) => s + m.balancePence, 0);
-  const mortgagedValue = properties
-    .filter((p) => balanceByProp.has(p.id))
-    .reduce((s, p) => s + (p.currentValuePence ?? 0), 0);
-  const valuationSet = new Set(valuationProps.map((v) => v.propertyId));
-  const pct = (n: number) =>
-    totalProperties ? Math.round((n / totalProperties) * 100) : 0;
-  const valuationCoveragePct = pct(
-    properties.filter((p) => valuationSet.has(p.id)).length,
-  );
-  const purchasePriceCoveragePct = pct(
-    properties.filter((p) => p.purchasePricePence != null).length,
-  );
-  const mortgageCoveragePct = pct(
-    properties.filter((p) => balanceByProp.has(p.id)).length,
-  );
-  const asset = {
-    ltvBp: loanToValueBp(totalBalance, mortgagedValue || null),
-    portfolioValuePence,
-    portfolioLtvBp: loanToValueBp(totalBalance, portfolioValuePence || null),
-    valuationCoveragePct,
-    purchasePriceCoveragePct,
-    mortgageCoveragePct,
-    portfolioDataPct: Math.round(
-      (valuationCoveragePct + purchasePriceCoveragePct + mortgageCoveragePct) / 3,
-    ),
-    totalProperties,
-  };
+  // --- Asset analysis + Market risk ---
+  const asset = computeAsset(properties, mortgages);
+  const marketRisk = computeMarketRisk(properties);
 
   // --- Occupancy ---
   const occupiedSet = new Set(activeTenancies.map((t) => t.propertyId));
   const occupiedCount = occupiedSet.size;
+  const totalProperties = properties.length;
   const vacantCount = Math.max(0, totalProperties - occupiedCount);
   const occupancy = {
     occupiedCount,
@@ -225,7 +177,7 @@ export async function getOverviewData(
     hasSchedule: collectionRows.length > 0,
   };
 
-  // --- Rental yields ---
+  // --- Rental yields (on purchase price) ---
   const annualRentByProp = new Map<string, number>();
   for (const t of activeTenancies) {
     annualRentByProp.set(
@@ -234,41 +186,19 @@ export async function getOverviewData(
         annualisedRentPence(t.rentPence, t.rentFrequency as RentFrequency),
     );
   }
-  const propsById = new Map(properties.map((p) => [p.id, p]));
-  const yields = {
-    perProperty: [...annualRentByProp.entries()].map(([propertyId, annual]) => ({
-      propertyId,
-      label: propsById.get(propertyId)?.addressLine1 ?? "Property",
-      yieldBp: annualYieldBp(annual, propsById.get(propertyId)?.currentValuePence),
+  const yields = computeYields(
+    properties.map((p) => ({
+      id: p.id,
+      label: p.addressLine1,
+      purchasePricePence: p.purchasePricePence,
     })),
-    portfolioYieldBp: annualYieldBp(
-      [...annualRentByProp.values()].reduce((s, v) => s + v, 0),
-      portfolioValuePence || null,
-    ),
-  };
-
-  // --- Market risk (heuristic from void rate, arrears rate, LTV) ---
-  const voidRatePct = occupancy.totalProperties
-    ? Math.round((vacantCount / totalProperties) * 100)
-    : 0;
-  const arrearsRatePct = expectedPence
-    ? Math.round((dashboard.kpis.arrearsPence / expectedPence) * 100)
-    : 0;
-  const avgLtvBp = asset.ltvBp;
-  const ltvPct = avgLtvBp == null ? 0 : avgLtvBp / 100;
-  const score =
-    (voidRatePct < 5 ? 0 : voidRatePct <= 15 ? 1 : 2) +
-    (arrearsRatePct < 3 ? 0 : arrearsRatePct <= 10 ? 1 : 2) +
-    (avgLtvBp == null || ltvPct < 60 ? 0 : ltvPct <= 75 ? 1 : 2);
-  const marketRisk = {
-    voidRatePct,
-    arrearsRatePct,
-    avgLtvBp,
-    level: (score <= 1 ? "low" : score <= 3 ? "medium" : "high") as
-      | "low"
-      | "medium"
-      | "high",
-  };
+    annualRentByProp,
+    {
+      hasRentalPayment: rentalPaymentCount > 0,
+      hasPurchasePrices: properties.some((p) => p.purchasePricePence != null),
+      taxYearLabel,
+    },
+  );
 
   return { ...dashboard, pnl, asset, occupancy, upcoming, rentCollection, yields, marketRisk };
 }

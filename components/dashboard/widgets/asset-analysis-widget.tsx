@@ -46,47 +46,43 @@ export function AssetAnalysisWidget({
           />
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Loan-to-value
-                </p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums text-primary">
-                  {formatBpPercent(asset.ltvBp)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Portfolio {formatBpPercent(asset.portfolioLtvBp)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Portfolio value
-                </p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">
-                  {formatPenceCompact(asset.portfolioValuePence)}
-                </p>
-              </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Loan-to-value (portfolio)
+              </p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums text-primary">
+                {formatBpPercent(asset.ltvBp)}
+              </p>
             </div>
+
+            <ul className="space-y-2.5 text-sm">
+              <Row
+                label="Property valuation"
+                total={asset.valuationTotalPence}
+                count={asset.valuationCount}
+                of={asset.totalProperties}
+              />
+              <Row
+                label="Purchase price"
+                total={asset.purchasePriceTotalPence}
+                count={asset.purchasePriceCount}
+                of={asset.totalProperties}
+              />
+              <Row
+                label="Mortgage balance"
+                total={asset.mortgageBalanceTotalPence}
+                count={asset.mortgageCount}
+                of={asset.totalProperties}
+              />
+            </ul>
 
             <div>
               <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                <span>Portfolio data completeness</span>
+                <span>% of portfolio data</span>
                 <span className="tabular-nums">{asset.portfolioDataPct}%</span>
               </div>
               <Progress value={asset.portfolioDataPct} />
             </div>
-
-            <ul className="space-y-2 text-sm">
-              <Coverage label="Valuation coverage" pct={asset.valuationCoveragePct} />
-              <Coverage
-                label="Purchase price coverage"
-                pct={asset.purchasePriceCoveragePct}
-              />
-              <Coverage
-                label="Mortgage balance coverage"
-                pct={asset.mortgageCoveragePct}
-              />
-            </ul>
           </>
         )}
       </CardContent>
@@ -94,12 +90,28 @@ export function AssetAnalysisWidget({
   );
 }
 
-function Coverage({ label, pct }: { label: string; pct: number }) {
+function Row({
+  label,
+  total,
+  count,
+  of,
+}: {
+  label: string;
+  total: number;
+  count: number;
+  of: number;
+}) {
   return (
-    <li className="flex items-center gap-3">
-      <span className="w-44 shrink-0 text-muted-foreground">{label}</span>
-      <Progress value={pct} tone="accent" className="flex-1" />
-      <span className="w-10 shrink-0 text-right tabular-nums">{pct}%</span>
+    <li className="flex items-center justify-between gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-right">
+        <span className="font-semibold tabular-nums">
+          {formatPenceCompact(total)}
+        </span>
+        <span className="ml-2 text-xs text-muted-foreground tabular-nums">
+          {count}/{of} properties
+        </span>
+      </span>
     </li>
   );
 }
