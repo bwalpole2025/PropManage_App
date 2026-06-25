@@ -1,6 +1,15 @@
 import type { Metadata } from "next";
+import { Poppins } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+
+// Clean geometric sans — drives --font-sans (tailwind `font-sans`) app-wide.
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "PropManage — Landlord finance & property management",
@@ -14,8 +23,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en-GB">
-      <body className="min-h-screen antialiased">
+    <html lang="en-GB" className={poppins.variable}>
+      <body className="min-h-screen font-sans antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

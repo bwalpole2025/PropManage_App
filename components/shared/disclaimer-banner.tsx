@@ -1,8 +1,9 @@
 import { Info } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Banner } from "@/components/ui/banner";
 
 /**
  * "Not tax advice" disclaimer. Render this wherever a tax figure is shown.
+ * Thin wrapper over the shared Banner primitive (warning tone).
  */
 export function DisclaimerBanner({
   text,
@@ -12,18 +13,13 @@ export function DisclaimerBanner({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground",
-        className,
-      )}
-      role="note"
+    <Banner
+      tone="warning"
+      icon={<Info className="h-4 w-4" />}
+      className={className}
     >
-      <Info className="mt-0.5 h-4 w-4 shrink-0" />
-      <p>
-        {text ??
-          "This is an automated estimate to help you plan — it is not tax advice. Confirm figures with a qualified accountant."}
-      </p>
-    </div>
+      {text ??
+        "This is an automated estimate to help you plan — it is not tax advice. Confirm figures with a qualified accountant."}
+    </Banner>
   );
 }

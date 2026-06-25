@@ -12,6 +12,8 @@ export default tseslint.config(
       "test-results/**",
       "storage/**",
       "prisma/migrations/**",
+      "storybook-static/**",
+      ".storybook/**",
       "next-env.d.ts",
     ],
   },

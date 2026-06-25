@@ -12,6 +12,15 @@ const accents: Record<Accent, string> = {
   neutral: "text-foreground",
 };
 
+export interface MetricCardProps {
+  label: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+  icon?: React.ReactNode;
+  accent?: Accent;
+  className?: string;
+}
+
 export function StatTile({
   label,
   value,
@@ -19,18 +28,14 @@ export function StatTile({
   icon,
   accent = "neutral",
   className,
-}: {
-  label: string;
-  value: React.ReactNode;
-  hint?: React.ReactNode;
-  icon?: React.ReactNode;
-  accent?: Accent;
-  className?: string;
-}) {
+}: MetricCardProps) {
   return (
     <Card className={cn("p-5", className)}>
       <div className="flex items-start justify-between">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        {/* Uppercase grey metric label. */}
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
         {icon ? <span className="text-muted-foreground">{icon}</span> : null}
       </div>
       <p className={cn("mt-2 text-2xl font-semibold tabular-nums", accents[accent])}>
@@ -42,3 +47,6 @@ export function StatTile({
     </Card>
   );
 }
+
+/** Spec name for the metric tile (uppercase label + large value). */
+export const MetricCard = StatTile;
