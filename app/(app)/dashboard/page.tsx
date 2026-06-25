@@ -51,8 +51,6 @@ export default async function DashboardPage() {
     },
   ];
 
-  const locked = !data.pnl.hasTransactions;
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -88,8 +86,12 @@ export default async function DashboardPage() {
         />
         <OccupancyWidget occupancy={data.occupancy} />
         <AssetAnalysisWidget asset={data.asset} />
-        <RentCollectionWidget data={data.rentCollection} locked={locked} />
-        <ArrearsWidget arrears={data.arrears} className="sm:col-span-2" />
+        <RentCollectionWidget data={data.rentCollection} />
+        <ArrearsWidget
+          arrears={data.arrears}
+          untracked={data.untrackedTenancies}
+          className="sm:col-span-2"
+        />
         <UpcomingPaymentsWidget upcoming={data.upcoming} />
         <RentalYieldsWidget yields={data.yields} />
         <MarketRiskWidget risk={data.marketRisk} />

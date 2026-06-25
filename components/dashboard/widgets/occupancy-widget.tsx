@@ -23,7 +23,9 @@ export function OccupancyWidget({
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle>Occupancy</CardTitle>
-          <CardDescription>Across {occupancy.totalProperties} properties</CardDescription>
+          <CardDescription>
+            Across {occupancy.availableCount} available units
+          </CardDescription>
         </div>
         <KeyRound className="h-5 w-5 text-primary" />
       </CardHeader>
@@ -59,6 +61,12 @@ export function OccupancyWidget({
               <Count label="Vacant" value={occupancy.vacantCount} />
               <Count label="FHL" value={occupancy.fhlCount} />
             </div>
+            <Link
+              href="/properties"
+              className="inline-block text-sm font-medium text-primary hover:underline"
+            >
+              Add tenancy →
+            </Link>
           </>
         )}
       </CardContent>

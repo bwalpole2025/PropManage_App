@@ -55,6 +55,26 @@ export function formatDateShort(date: Date | string): string {
   return dateFmtShort.format(new Date(date));
 }
 
+const monthShortFmt = new Intl.DateTimeFormat("en-GB", { month: "short" });
+
+/** Ordinal day + short month, e.g. "5th Jul", "1st Aug", "22nd Sep". */
+export function formatDateOrdinal(date: Date | string): string {
+  const d = new Date(date);
+  const day = d.getDate();
+  const rem100 = day % 100;
+  const suffix =
+    rem100 >= 11 && rem100 <= 13
+      ? "th"
+      : day % 10 === 1
+        ? "st"
+        : day % 10 === 2
+          ? "nd"
+          : day % 10 === 3
+            ? "rd"
+            : "th";
+  return `${day}${suffix} ${monthShortFmt.format(d)}`;
+}
+
 /** Whole-day difference from `now` to `date` (positive = in the future). */
 export function daysUntil(date: Date | string, now: Date = new Date()): number {
   const target = new Date(date);

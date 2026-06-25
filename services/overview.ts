@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { RentFrequency, TenancyStatus, TxnDirection, TxnStatus } from "@/lib/enums";
 import { annualisedRentPence } from "@/lib/finance";
 import { taxYearLabelFor, taxYearStartDate } from "@/lib/format";
+import { nextDueDate } from "@/lib/rent";
 import {
   computeAsset,
   computeMarketRisk,
@@ -16,6 +17,8 @@ import { getDashboardData, type DashboardData } from "./dashboard";
 
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
+const monthLongFmt = new Intl.DateTimeFormat("en-GB", { month: "long" });
+
 export interface OverviewData extends DashboardData {
   pnl: PnlResult & { hasTransactions: boolean };
   asset: AssetResult;
@@ -27,8 +30,15 @@ export interface OverviewData extends DashboardData {
     totalProperties: number;
     occupancyPct: number;
   };
+  untrackedTenancies: {
+    tenancyId: string;
+    propertyId: string;
+    propertyLabel: string;
+    tenantName: string;
+  }[];
   upcoming: {
     tenancyId: string;
+    propertyId: string;
     propertyLabel: string;
     tenantName: string;
     dueDate: Date;
@@ -39,6 +49,7 @@ export interface OverviewData extends DashboardData {
     expectedPence: number;
     collectedPct: number;
     hasSchedule: boolean;
+    monthLabel: string;
   };
   yields: YieldsResult;
   marketRisk: MarketRiskResult;
@@ -53,79 +64,68 @@ export async function getOverviewData(
 
   const now = new Date();
   const yearAgo = new Date(now.getTime() - YEAR_MS);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const [
-    txns,
-    properties,
-    mortgages,
-    activeTenancies,
-    upcomingRows,
-    collectionRows,
-    rentalPaymentCount,
-  ] = await Promise.all([
-    // Categorised, non-excluded transactions in the last 12 months.
-    prisma.transaction.findMany({
-      where: {
-        accountId: entityId,
-        date: { gte: yearAgo },
-        status: { not: TxnStatus.EXCLUDED },
-        category: { not: null },
-      },
-      select: { direction: true, amountPence: true, date: true },
-    }),
-    prisma.property.findMany({
-      where: { accountId: entityId },
-      select: {
-        id: true,
-        addressLine1: true,
-        currentValuePence: true,
-        purchasePricePence: true,
-        isFHL: true,
-      },
-    }),
-    prisma.mortgage.findMany({
-      where: { accountId: entityId, archivedAt: null },
-      select: { propertyId: true, balancePence: true },
-    }),
-    prisma.tenancy.findMany({
-      where: { property: { accountId: entityId }, status: TenancyStatus.ACTIVE },
-      select: { propertyId: true, rentPence: true, rentFrequency: true },
-    }),
-    prisma.rentScheduleEntry.findMany({
-      where: {
-        dueDate: { gte: now },
-        tenancy: {
-          status: TenancyStatus.ACTIVE,
-          property: { accountId: entityId },
+  const [txns, properties, mortgages, activeTenancies, collectionRows, rentalPaymentCount] =
+    await Promise.all([
+      // Categorised, non-excluded transactions in the last 12 months.
+      prisma.transaction.findMany({
+        where: {
+          accountId: entityId,
+          date: { gte: yearAgo },
+          status: { not: TxnStatus.EXCLUDED },
+          category: { not: null },
         },
-      },
-      include: {
-        tenancy: {
-          include: {
-            property: { select: { addressLine1: true } },
-            tenants: { where: { isLeadTenant: true }, take: 1 },
-          },
+        select: { direction: true, amountPence: true, date: true },
+      }),
+      prisma.property.findMany({
+        where: { accountId: entityId },
+        select: {
+          id: true,
+          addressLine1: true,
+          currentValuePence: true,
+          purchasePricePence: true,
+          isFHL: true,
         },
-      },
-      orderBy: { dueDate: "asc" },
-      take: 5,
-    }),
-    prisma.rentScheduleEntry.findMany({
-      where: {
-        dueDate: { gte: yearAgo },
-        tenancy: { property: { accountId: entityId } },
-      },
-      select: { expectedPence: true, receivedPence: true },
-    }),
-    // A rental payment of ANY age unlocks the yields widget.
-    prisma.transaction.count({
-      where: {
-        accountId: entityId,
-        direction: TxnDirection.INCOME,
-        status: { not: TxnStatus.EXCLUDED },
-      },
-    }),
-  ]);
+      }),
+      prisma.mortgage.findMany({
+        where: { accountId: entityId, archivedAt: null },
+        select: { propertyId: true, balancePence: true },
+      }),
+      // Rich active-tenancy rows: power occupancy, yields, upcoming + untracked.
+      prisma.tenancy.findMany({
+        where: { property: { accountId: entityId }, status: TenancyStatus.ACTIVE },
+        select: {
+          id: true,
+          propertyId: true,
+          rentPence: true,
+          rentFrequency: true,
+          rentDueDay: true,
+          startDate: true,
+          nextPaymentDate: true,
+          property: { select: { addressLine1: true } },
+          tenants: { where: { isLeadTenant: true }, take: 1, select: { name: true } },
+          _count: { select: { rentSchedule: true } },
+        },
+      }),
+      // Rent schedule entries due in the CURRENT calendar month (rent due date).
+      prisma.rentScheduleEntry.findMany({
+        where: {
+          dueDate: { gte: monthStart, lt: monthEnd },
+          tenancy: { property: { accountId: entityId } },
+        },
+        select: { expectedPence: true, receivedPence: true },
+      }),
+      // A rental payment of ANY age unlocks the yields widget.
+      prisma.transaction.count({
+        where: {
+          accountId: entityId,
+          direction: TxnDirection.INCOME,
+          status: { not: TxnStatus.EXCLUDED },
+        },
+      }),
+    ]);
 
   const taxYearLabel = taxYearLabelFor();
   const taxYearStart = taxYearStartDate(taxYearLabel);
@@ -140,15 +140,14 @@ export async function getOverviewData(
   const asset = computeAsset(properties, mortgages);
   const marketRisk = computeMarketRisk(properties);
 
-  // --- Occupancy ---
-  const occupiedSet = new Set(activeTenancies.map((t) => t.propertyId));
-  const occupiedCount = occupiedSet.size;
+  // --- Occupancy (occupied ÷ available units) ---
   const totalProperties = properties.length;
+  const occupiedCount = new Set(activeTenancies.map((t) => t.propertyId)).size;
   const vacantCount = Math.max(0, totalProperties - occupiedCount);
   const occupancy = {
     occupiedCount,
     vacantCount,
-    availableCount: vacantCount,
+    availableCount: totalProperties,
     fhlCount: properties.filter((p) => p.isFHL).length,
     totalProperties,
     occupancyPct: totalProperties
@@ -156,16 +155,40 @@ export async function getOverviewData(
       : 0,
   };
 
-  // --- Upcoming payments ---
-  const upcoming = upcomingRows.map((e) => ({
-    tenancyId: e.tenancyId,
-    propertyLabel: e.tenancy.property.addressLine1,
-    tenantName: e.tenancy.tenants[0]?.name ?? "Tenant",
-    dueDate: e.dueDate,
-    expectedPence: e.expectedPence,
-  }));
+  const tenantOf = (t: (typeof activeTenancies)[number]) =>
+    t.tenants[0]?.name ?? "Tenant";
 
-  // --- Rent collection (trailing 12 months) ---
+  // --- Untracked tenancies (active, no rent schedule yet) ---
+  const untrackedTenancies = activeTenancies
+    .filter((t) => t._count.rentSchedule === 0)
+    .map((t) => ({
+      tenancyId: t.id,
+      propertyId: t.propertyId,
+      propertyLabel: t.property.addressLine1,
+      tenantName: tenantOf(t),
+    }));
+
+  // --- Upcoming payments (next due per active tenancy) ---
+  const upcoming = activeTenancies
+    .map((t) => ({
+      tenancyId: t.id,
+      propertyId: t.propertyId,
+      propertyLabel: t.property.addressLine1,
+      tenantName: tenantOf(t),
+      dueDate: nextDueDate(
+        {
+          rentDueDay: t.rentDueDay,
+          rentFrequency: t.rentFrequency,
+          startDate: t.startDate,
+          nextPaymentDate: t.nextPaymentDate,
+        },
+        now,
+      ),
+      expectedPence: t.rentPence,
+    }))
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+
+  // --- Rent collection (current calendar month) ---
   const expectedPence = collectionRows.reduce((s, r) => s + r.expectedPence, 0);
   const receivedPence = collectionRows.reduce((s, r) => s + r.receivedPence, 0);
   const rentCollection = {
@@ -175,6 +198,7 @@ export async function getOverviewData(
       ? Math.round((receivedPence / expectedPence) * 100)
       : 0,
     hasSchedule: collectionRows.length > 0,
+    monthLabel: monthLongFmt.format(now),
   };
 
   // --- Rental yields (on purchase price) ---
@@ -200,5 +224,15 @@ export async function getOverviewData(
     },
   );
 
-  return { ...dashboard, pnl, asset, occupancy, upcoming, rentCollection, yields, marketRisk };
+  return {
+    ...dashboard,
+    pnl,
+    asset,
+    occupancy,
+    untrackedTenancies,
+    upcoming,
+    rentCollection,
+    yields,
+    marketRisk,
+  };
 }
