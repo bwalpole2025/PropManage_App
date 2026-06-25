@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { TenancyStatus, TxnDirection } from "@/lib/enums";
+import { normaliseMonthlyRentPence } from "@/lib/property-finance";
 
 export interface PropertyListItem {
   id: string;
@@ -40,13 +41,7 @@ export async function listProperties(
 
   return properties.map((p) => {
     const active = p.tenancies.filter((t) => t.status === TenancyStatus.ACTIVE);
-    const monthly = active.reduce((sum, t) => {
-      // normalise to a monthly figure
-      const perYear = { WEEKLY: 52, FORTNIGHTLY: 26, MONTHLY: 12, QUARTERLY: 4, ANNUALLY: 1 }[
-        t.rentFrequency as "MONTHLY"
-      ] ?? 12;
-      return sum + Math.round((t.rentPence * perYear) / 12);
-    }, 0);
+    const monthly = normaliseMonthlyRentPence(p.tenancies);
     const hasArrears = p.tenancies.some((t) => t.rentSchedule.length > 0);
     return {
       id: p.id,

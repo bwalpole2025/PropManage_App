@@ -17,6 +17,7 @@ import { taxYearLabelFor, taxYearStartDate } from "../lib/format";
 import {
   DocumentCategory,
   DepositScheme,
+  InsuranceType,
   LandlordType,
   MembershipRole,
   MembershipStatus,
@@ -70,6 +71,7 @@ async function reset() {
     prisma.note.deleteMany(),
     prisma.mortgage.deleteMany(),
     prisma.valuation.deleteMany(),
+    prisma.insurancePolicy.deleteMany(),
     prisma.fileObject.deleteMany(),
     prisma.tenant.deleteMany(),
     prisma.tenancy.deleteMany(),
@@ -265,6 +267,28 @@ async function main() {
       currentValuePence: 23_500_000,
       furnished: true,
       isFHL: true, // furnished holiday let — shows in the Occupancy widget's FHL count
+      ownerships: {
+        create: [
+          { beneficialOwnerId: ownerJordan.id, ownershipPercentageBp: 10000 },
+        ],
+      },
+    },
+  });
+
+  // --- Vacant property for entity A (no active tenancy) — drives the Vacant metric ---
+  const prop4 = await prisma.property.create({
+    data: {
+      accountId: entityA.id,
+      portfolioId: defaultPortfolioA.id,
+      addressLine1: "15 Sydenham Villas",
+      city: "Bristol",
+      postcode: "BS6 5SW",
+      propertyType: PropertyType.TERRACED,
+      bedrooms: 2,
+      purchaseDate: new Date(2023, 10, 20),
+      purchasePricePence: 24_500_000,
+      currentValuePence: 25_200_000,
+      furnished: false,
       ownerships: {
         create: [
           { beneficialOwnerId: ownerJordan.id, ownershipPercentageBp: 10000 },
@@ -658,6 +682,28 @@ async function main() {
       source: "RICS",
     },
   });
+
+  // --- Insurance policies ---
+  const insurancePolicies = [
+    { propertyId: prop1.id, accountId: entityA.id, type: InsuranceType.COMBINED, provider: "Direct Line for Business", policyNumber: "DL-LL-7782341", expiry: daysFromNow(210), premiumPence: 32_400 },
+    { propertyId: prop2.id, accountId: entityA.id, type: InsuranceType.BUILDINGS, provider: "Aviva", policyNumber: "AV-BLD-5520198", expiry: daysFromNow(48), premiumPence: 21_900 },
+    { propertyId: prop4.id, accountId: entityA.id, type: InsuranceType.LANDLORD_LIABILITY, provider: "Hiscox", policyNumber: "HX-LIA-3391107", expiry: daysFromNow(-5), premiumPence: 15_600 },
+    { propertyId: prop3.id, accountId: entityB.id, type: InsuranceType.RENT_GUARANTEE, provider: "Rentguard", policyNumber: "RG-2026-44021", expiry: daysFromNow(120), premiumPence: 28_800 },
+  ];
+  for (const ip of insurancePolicies) {
+    await prisma.insurancePolicy.create({
+      data: {
+        accountId: ip.accountId,
+        propertyId: ip.propertyId,
+        type: ip.type,
+        provider: ip.provider,
+        policyNumber: ip.policyNumber,
+        expiryDate: ip.expiry,
+        premiumPence: ip.premiumPence,
+        premiumFrequency: RentFrequency.ANNUALLY,
+      },
+    });
+  }
   await prisma.note.create({
     data: {
       accountId: entityA.id,

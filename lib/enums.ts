@@ -293,6 +293,24 @@ export const ReminderStateLabel: Record<ReminderState, string> = {
   COMPLETED: "Completed",
 };
 
+export const InsuranceType = {
+  BUILDINGS: "BUILDINGS",
+  CONTENTS: "CONTENTS",
+  LANDLORD_LIABILITY: "LANDLORD_LIABILITY",
+  COMBINED: "COMBINED",
+  RENT_GUARANTEE: "RENT_GUARANTEE",
+  OTHER: "OTHER",
+} as const;
+export type InsuranceType = (typeof InsuranceType)[keyof typeof InsuranceType];
+export const InsuranceTypeLabel: Record<InsuranceType, string> = {
+  BUILDINGS: "Buildings",
+  CONTENTS: "Contents",
+  LANDLORD_LIABILITY: "Landlord liability",
+  COMBINED: "Combined landlord",
+  RENT_GUARANTEE: "Rent guarantee",
+  OTHER: "Other",
+};
+
 export const MortgageProduct = {
   FIXED: "FIXED",
   TRACKER: "TRACKER",

@@ -176,6 +176,7 @@ model Account {
   mtdConnection    MtdConnection?
   auditLogs        AuditLog[]
   notifications    Notification[]
+  insurancePolicies InsurancePolicy[]
 
   @@index([principalUserId])
 }
@@ -325,6 +326,7 @@ model Property {
   reminders       Reminder[]
   mortgages       Mortgage[]
   valuations      Valuation[]
+  insurancePolicies InsurancePolicy[]
   notes           Note[]
   files           FileObject[]
 
@@ -351,6 +353,29 @@ model Mortgage {
   archivedAt          DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  entity   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([propertyId])
+}
+
+// Insurance policies held against a property (buildings, contents, etc.).
+model InsurancePolicy {
+  id               String    @id @default(cuid())
+  accountId        String
+  propertyId       String
+  type             String    @default("LANDLORD_LIABILITY") // InsuranceType
+  provider         String
+  policyNumber     String?
+  expiryDate       DateTime?
+  premiumPence     Int?
+  premiumFrequency String    @default("ANNUALLY") // RentFrequency-style cadence
+  currency         String    @default("GBP")
+  archivedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   entity   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)

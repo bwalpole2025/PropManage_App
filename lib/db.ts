@@ -22,6 +22,7 @@ const DIRECTLY_SCOPED_MODELS = new Set([
   "TaxStatement",
   "AuditLog",
   "Notification",
+  "InsurancePolicy",
 ]);
 
 // find-style reads where soft-delete exclusion is safe to inject (NOT findUnique,
