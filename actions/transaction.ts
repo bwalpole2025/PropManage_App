@@ -19,10 +19,8 @@ const createSchema = z.object({
   merchant: z.string().optional(),
 });
 
-export async function createTransactionAction(formData: FormData) {
-  const { entityId } = await getActiveContext();
-  await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
-
+/** Shared create logic for both the full-page form and the inline dialog. */
+async function createTransactionFromForm(entityId: string, formData: FormData) {
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid transaction");
@@ -58,7 +56,33 @@ export async function createTransactionAction(formData: FormData) {
   revalidatePath("/transactions");
   revalidatePath("/tax");
   revalidatePath("/dashboard");
+}
+
+export async function createTransactionAction(formData: FormData) {
+  const { entityId } = await getActiveContext();
+  await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
+  await createTransactionFromForm(entityId, formData);
   redirect("/transactions");
+}
+
+export interface AddTransactionState {
+  ok?: boolean;
+  error?: string;
+}
+
+/** Non-redirecting create for the inline dialog — the client closes + refreshes. */
+export async function addTransactionAction(
+  _prev: AddTransactionState,
+  formData: FormData,
+): Promise<AddTransactionState> {
+  const { entityId } = await getActiveContext();
+  await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
+  try {
+    await createTransactionFromForm(entityId, formData);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  return { ok: true };
 }
 
 /** Set or change a transaction's SA105 category (and matching direction). */

@@ -59,7 +59,7 @@ const TENANCIES_COACHMARK: CoachmarkStep[] = [
 const TRANSACTIONS_COACHMARK: CoachmarkStep[] = [
   {
     icon: ArrowLeftRight,
-    heading: "Categorise every transaction",
+    heading: "Categorise rental income and expense",
     bullets: [
       "Tag each transaction to an SA105 box — rent, repairs, mortgage interest.",
       "Income vs expense is set per entry, with full edit history.",

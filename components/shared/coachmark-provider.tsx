@@ -12,6 +12,10 @@ interface CoachmarkContextValue {
   mounted: boolean;
   isDismissed: (section: string) => boolean;
   dismiss: (section: string, level: CoachmarkLevel) => void;
+  /** Force a section's coachmark open on demand (e.g. an info button). */
+  forceOpen: string | null;
+  reopen: (section: string) => void;
+  clearForceOpen: () => void;
 }
 
 const CoachmarkContext = React.createContext<CoachmarkContextValue | null>(null);
@@ -30,6 +34,7 @@ export function CoachmarkProvider({
 }) {
   const [dismissed, setDismissed] = React.useState<CoachmarkState>(initial);
   const [mounted, setMounted] = React.useState(false);
+  const [forceOpen, setForceOpen] = React.useState<string | null>(null);
   React.useEffect(() => setMounted(true), []);
 
   const isDismissed = React.useCallback(
@@ -45,8 +50,13 @@ export function CoachmarkProvider({
     [],
   );
 
+  const reopen = React.useCallback((section: string) => setForceOpen(section), []);
+  const clearForceOpen = React.useCallback(() => setForceOpen(null), []);
+
   return (
-    <CoachmarkContext.Provider value={{ mounted, isDismissed, dismiss }}>
+    <CoachmarkContext.Provider
+      value={{ mounted, isDismissed, dismiss, forceOpen, reopen, clearForceOpen }}
+    >
       {children}
     </CoachmarkContext.Provider>
   );

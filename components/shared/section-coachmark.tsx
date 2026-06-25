@@ -30,13 +30,14 @@ export interface CoachmarkStep {
  * Server→Client boundary; the steps (with icon components) are resolved here.
  */
 export function SectionCoachmark({ section }: { section: string }) {
-  const { mounted, isDismissed, dismiss } = useCoachmarks();
+  const { mounted, isDismissed, dismiss, forceOpen, clearForceOpen } =
+    useCoachmarks();
   const [index, setIndex] = React.useState(0);
 
   const steps = COACHMARKS[section] ?? [];
   if (!steps.length) return null;
 
-  const open = mounted && !isDismissed(section);
+  const open = forceOpen === section || (mounted && !isDismissed(section));
   const step = steps[index];
   const Icon = step.icon;
   const multi = steps.length > 1;
@@ -44,6 +45,7 @@ export function SectionCoachmark({ section }: { section: string }) {
 
   function close(level: "ok" | "off") {
     setIndex(0);
+    if (forceOpen === section) clearForceOpen();
     dismiss(section, level);
   }
   function next() {
