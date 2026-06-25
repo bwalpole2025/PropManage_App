@@ -1,7 +1,9 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "../db";
 import { MembershipStatus } from "../enums";
+import { fullName } from "../format";
 import { auth } from "./index";
 import { can, type Capability } from "./rbac";
 
@@ -32,17 +34,29 @@ export interface ActiveContext {
   memberships: MembershipContext[];
 }
 
-/** Current authenticated user (or null). */
-export async function getSessionUser(): Promise<SessionUser | null> {
+/**
+ * Current authenticated user (or null). Verifies the JWT's user still exists in
+ * the database — after a DB reseed/restore the cookie's user id can be stale, and
+ * a phantom session must be treated as logged out (otherwise account/entity
+ * creation hits a `principalUserId` foreign-key violation). Deduped per request.
+ */
+export const getSessionUser = cache(async function getSessionUser(): Promise<
+  SessionUser | null
+> {
   const session = await auth();
   if (!session?.user?.id) return null;
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, firstName: true, lastName: true, email: true, role: true },
+  });
+  if (!dbUser) return null; // stale session — user no longer exists
   return {
-    id: session.user.id,
-    name: session.user.name,
-    email: session.user.email,
-    role: session.user.role,
+    id: dbUser.id,
+    name: fullName(dbUser),
+    email: dbUser.email,
+    role: dbUser.role,
   };
-}
+});
 
 /** Redirect to /login unless authenticated. */
 export async function requireUser(): Promise<SessionUser> {
