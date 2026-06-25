@@ -4,6 +4,7 @@ import { getActiveContext } from "@/lib/auth/active-org";
 import { listTransactions } from "@/services/transactions";
 import { can, Capability } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/shared/page-header";
+import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { StatTile } from "@/components/shared/stat-tile";
 import { EmptyState } from "@/components/shared/empty-state";
 import { CurrencyValue } from "@/components/shared/currency-value";
@@ -35,6 +36,7 @@ export default async function TransactionsPage({
 
   return (
     <div className="space-y-6">
+      <SectionCoachmark section="transactions" />
       <PageHeader
         title="Transactions"
         description="Categorise rent and expenses to SA105 boxes — the basis for your tax estimate."

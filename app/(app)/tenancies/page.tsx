@@ -2,6 +2,7 @@ import { KeyRound } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { listTenancies } from "@/services/tenancies";
 import { PageHeader } from "@/components/shared/page-header";
+import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ export default async function TenanciesPage() {
 
   return (
     <div className="space-y-6">
+      <SectionCoachmark section="tenancies" />
       <PageHeader
         title="Tenancies"
         description="Every tenancy across your portfolio, with rent and arrears at a glance."

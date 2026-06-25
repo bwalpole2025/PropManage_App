@@ -1,5 +1,6 @@
 import { FileSpreadsheet, PieChart, Building2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
+import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { ComingSoon } from "@/components/shared/coming-soon";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -24,6 +25,7 @@ const PLANNED = [
 export default function ReportsPage() {
   return (
     <div className="space-y-6">
+      <SectionCoachmark section="reports" />
       <PageHeader
         title="Reports"
         description="Export-ready statements for you and your accountant."

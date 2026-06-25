@@ -26,7 +26,11 @@ test.describe("auth smoke", () => {
     ).toBeVisible();
 
     // Onboarding card (server-rendered) + KPI tile (tRPC + TanStack Query).
-    await expect(page.getByText("Goodbye to spreadsheets")).toBeVisible();
+    // Title is dynamic: "...N steps away from saying goodbye to your spreadsheet"
+    // or, once set up, "You've said goodbye to your spreadsheet".
+    await expect(
+      page.getByText(/goodbye to (your spreadsheet|spreadsheets)/i),
+    ).toBeVisible();
     await expect(page.getByText("Rental income")).toBeVisible();
   });
 });

@@ -2,6 +2,7 @@ import { FileCheck2, CheckCircle2, Clock } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { getMtdOverview } from "@/services/mtd";
 import { PageHeader } from "@/components/shared/page-header";
+import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { ComingSoon } from "@/components/shared/coming-soon";
 import { DisclaimerBanner } from "@/components/shared/disclaimer-banner";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ export default async function MtdPage() {
 
   return (
     <div className="space-y-6">
+      <SectionCoachmark section="mtd" />
       <PageHeader
         title="Making Tax Digital"
         description={`Quarterly updates for Income Tax · tax year ${mtd.taxYear}`}

@@ -4,6 +4,7 @@ import { getActiveContext } from "@/lib/auth/active-org";
 import { listProperties } from "@/services/properties";
 import { can, Capability } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/shared/page-header";
+import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,7 @@ export default async function PropertiesPage() {
 
   return (
     <div className="space-y-6">
+      <SectionCoachmark section="properties" />
       <PageHeader
         title="My Properties"
         description="Every rental in this account, with rent and compliance at a glance."

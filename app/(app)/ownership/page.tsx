@@ -2,6 +2,7 @@ import { Users2, Building2 } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { listOwnership } from "@/services/ownership";
 import { PageHeader } from "@/components/shared/page-header";
+import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
   Card,
@@ -23,6 +24,7 @@ export default async function OwnershipPage() {
 
   return (
     <div className="space-y-6">
+      <SectionCoachmark section="ownership" />
       <PageHeader
         title="Ownership"
         description="Beneficial owners and their share of each property — the basis for tax splits."

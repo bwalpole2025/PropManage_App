@@ -22,7 +22,7 @@ import { ComplianceTypeLabel } from "@/lib/enums";
 
 export default async function DashboardPage() {
   const ctx = await getActiveContext();
-  const data = await getDashboardData(ctx.entityId);
+  const data = await getDashboardData(ctx.entityId, ctx.user.id);
 
   const steps = [
     {
@@ -48,6 +48,9 @@ export default async function DashboardPage() {
       href: "/transactions/new",
       cta: "Add transaction",
       done: data.onboarding.hasTransaction,
+      badge: data.onboarding.transactionCount
+        ? String(data.onboarding.transactionCount)
+        : undefined,
     },
   ];
 
@@ -64,7 +67,10 @@ export default async function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Onboarding + alerts */}
         <div className="space-y-6 lg:col-span-2">
-          <OnboardingChecklist steps={steps} />
+          <OnboardingChecklist
+            steps={steps}
+            emailUnverified={data.onboarding.emailUnverified}
+          />
 
           {/* Missing-rent / arrears */}
           <Card>

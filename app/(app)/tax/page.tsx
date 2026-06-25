@@ -2,6 +2,7 @@ import { Calculator, TrendingUp, TrendingDown, Receipt } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { getTaxEstimate } from "@/services/tax";
 import { PageHeader } from "@/components/shared/page-header";
+import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { StatTile } from "@/components/shared/stat-tile";
 import { DisclaimerBanner } from "@/components/shared/disclaimer-banner";
 import { TaxControls } from "@/components/tax/tax-controls";
@@ -47,6 +48,7 @@ export default async function TaxPage({
 
   return (
     <div className="space-y-6">
+      <SectionCoachmark section="tax" />
       <PageHeader
         title="Tax estimate"
         description={`SA105 UK property pages · ${entity.displayName} (${

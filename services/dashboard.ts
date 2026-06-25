@@ -11,6 +11,8 @@ export interface DashboardData {
     hasProperty: boolean;
     hasTenancy: boolean;
     hasTransaction: boolean;
+    transactionCount: number;
+    emailUnverified: boolean;
   };
   kpis: {
     incomePence: number;
@@ -46,13 +48,14 @@ export interface ComplianceRow {
 
 export async function getDashboardData(
   entityId: string,
+  userId?: string,
 ): Promise<DashboardData> {
   const taxYear = taxYearLabelFor();
   const start = taxYearStartDate(taxYear);
   const end = taxYearEndDate(taxYear);
   const entity = await getEntity(entityId);
 
-  const [propertyCount, tenancyCount, txnCount, txns, schedule, compliance] =
+  const [propertyCount, tenancyCount, txnCount, txns, schedule, compliance, user] =
     await Promise.all([
       prisma.property.count({ where: { accountId: entityId } }),
       prisma.tenancy.count({
@@ -94,6 +97,12 @@ export async function getDashboardData(
         orderBy: { expiryDate: "asc" },
         take: 6,
       }),
+      userId
+        ? prisma.user.findUnique({
+            where: { id: userId },
+            select: { emailVerified: true },
+          })
+        : Promise.resolve(null),
     ]);
 
   const incomePence = txns
@@ -130,6 +139,8 @@ export async function getDashboardData(
       hasProperty: propertyCount > 0,
       hasTenancy: tenancyCount > 0,
       hasTransaction: txnCount > 0,
+      transactionCount: txnCount,
+      emailUnverified: userId ? !user?.emailVerified : false,
     },
     kpis: {
       incomePence,

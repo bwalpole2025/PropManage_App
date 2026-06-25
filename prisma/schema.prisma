@@ -37,6 +37,8 @@ model User {
   numberOfPropertiesManaged Int       @default(0)
   totpSecret                String? // base32 TOTP secret (set during enrolment)
   twoFactorEnabled          Boolean   @default(false)
+  // First-run coachmark dismissals: { "<section>": "ok" | "off" }. null = none seen.
+  coachmarkState            Json?
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
 

@@ -2,6 +2,7 @@ import { FolderClock, FileText, Upload } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { getFilesAndDates } from "@/services/files";
 import { PageHeader } from "@/components/shared/page-header";
+import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { StatTile } from "@/components/shared/stat-tile";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ReminderBadge } from "@/components/shared/reminder-badge";
@@ -23,6 +24,7 @@ export default async function DocumentsPage() {
 
   return (
     <div className="space-y-6">
+      <SectionCoachmark section="documents" />
       <PageHeader
         title="Documents"
         description="Certificates and uploaded files across this account, soonest expiry first."

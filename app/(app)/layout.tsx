@@ -7,6 +7,8 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { TrialBanner } from "@/components/layout/trial-banner";
 import { HelpFab } from "@/components/layout/help-fab";
 import { VerifyEmailBanner } from "@/components/shared/verify-email-banner";
+import { CoachmarkProvider } from "@/components/shared/coachmark-provider";
+import type { CoachmarkState } from "@/actions/coachmarks";
 
 export default async function AppLayout({
   children,
@@ -17,7 +19,7 @@ export default async function AppLayout({
   const [user, account, cookieStore] = await Promise.all([
     prisma.user.findUnique({
       where: { id: ctx.user.id },
-      select: { emailVerified: true },
+      select: { emailVerified: true, coachmarkState: true },
     }),
     prisma.account.findUnique({
       where: { id: ctx.entityId },
@@ -53,7 +55,13 @@ export default async function AppLayout({
         />
         {unverified ? <VerifyEmailBanner /> : null}
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mx-auto max-w-6xl">{children}</div>
+          <div className="mx-auto max-w-6xl">
+            <CoachmarkProvider
+              initial={(user?.coachmarkState as CoachmarkState | null) ?? {}}
+            >
+              {children}
+            </CoachmarkProvider>
+          </div>
         </main>
       </div>
 
