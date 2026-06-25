@@ -10,7 +10,7 @@ import { signIn } from "@/lib/auth";
 import {
   MembershipRole,
   MembershipStatus,
-  UserKind,
+  UserRole,
 } from "@/lib/enums";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
@@ -43,18 +43,18 @@ export async function inviteMemberAction(formData: FormData) {
     update: {},
     create: {
       email,
-      kind:
+      role:
         role === MembershipRole.ACCOUNTANT
-          ? UserKind.ACCOUNTANT
+          ? UserRole.ACCOUNTANT
           : role === MembershipRole.ASSISTANT
-            ? UserKind.ASSISTANT
-            : UserKind.LANDLORD,
+            ? UserRole.ASSISTANT
+            : UserRole.OWNER,
     },
   });
 
   const existing = await prisma.membership.findUnique({
     where: {
-      userId_landlordEntityId: { userId: user.id, landlordEntityId: entityId },
+      userId_accountId: { userId: user.id, accountId: entityId },
     },
   });
   if (existing && existing.status !== MembershipStatus.REVOKED) {
@@ -71,7 +71,7 @@ export async function inviteMemberAction(formData: FormData) {
     await prisma.membership.create({
       data: {
         userId: user.id,
-        landlordEntityId: entityId,
+        accountId: entityId,
         role,
         status: MembershipStatus.INVITED,
         inviteEmail: email,
@@ -89,7 +89,7 @@ export async function revokeMemberAction(membershipId: string) {
   await requireEntityAccess(entityId, Capability.MANAGE_MEMBERS);
 
   const membership = await prisma.membership.findFirst({
-    where: { id: membershipId, landlordEntityId: entityId },
+    where: { id: membershipId, accountId: entityId },
   });
   if (!membership) throw new Error("Member not found");
   if (membership.role === MembershipRole.OWNER) {
@@ -129,10 +129,12 @@ export async function acceptInviteAction(formData: FormData) {
     if (!password || password.length < 8) {
       throw new Error("Choose a password of at least 8 characters.");
     }
+    const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
     await prisma.user.update({
       where: { id: membership.userId },
       data: {
-        name: name || membership.user.name,
+        firstName: parts[0] ?? membership.user.firstName,
+        lastName: parts.slice(1).join(" ") || membership.user.lastName,
         passwordHash: await bcrypt.hash(password, 10),
         emailVerified: new Date(),
       },

@@ -24,7 +24,7 @@ export default async function NewTransactionPage() {
   const entityId = ctx.entityId;
 
   const properties = await prisma.property.findMany({
-    where: { landlordEntityId: entityId, archivedAt: null },
+    where: { accountId: entityId, archivedAt: null },
     select: { id: true, addressLine1: true },
     orderBy: { addressLine1: "asc" },
   });

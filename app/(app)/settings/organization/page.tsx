@@ -8,7 +8,7 @@ import { LandlordTypeLabel } from "@/lib/enums";
 
 export default async function OrganizationSettingsPage() {
   const ctx = await getActiveContext();
-  const entity = await prisma.landlordEntity.findUniqueOrThrow({
+  const entity = await prisma.account.findUniqueOrThrow({
     where: { id: ctx.entityId },
   });
 

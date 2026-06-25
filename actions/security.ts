@@ -28,7 +28,7 @@ export async function beginTotpEnrollmentAction(): Promise<{
   const secret = authenticator.generateSecret();
   await prisma.user.update({
     where: { id: user.id },
-    data: { totpSecret: secret, totpEnabled: false },
+    data: { totpSecret: secret, twoFactorEnabled: false },
   });
 
   const otpauthUrl = authenticator.keyuri(user.email, "PropManage", secret);
@@ -53,7 +53,7 @@ export async function confirmTotpEnrollmentAction(
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { totpEnabled: true },
+    data: { twoFactorEnabled: true },
   });
   return { success: "Two-factor authentication is now enabled." };
 }
@@ -62,7 +62,7 @@ export async function disableTotpAction(): Promise<SecurityFormState> {
   const sessionUser = await requireUser();
   await prisma.user.update({
     where: { id: sessionUser.id },
-    data: { totpSecret: null, totpEnabled: false },
+    data: { totpSecret: null, twoFactorEnabled: false },
   });
   return { success: "Two-factor authentication disabled." };
 }

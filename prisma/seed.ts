@@ -26,7 +26,7 @@ import {
   TxnDirection,
   TxnSource,
   TxnStatus,
-  UserKind,
+  UserRole,
 } from "../lib/enums";
 
 const prisma = new PrismaClient();
@@ -69,14 +69,16 @@ async function reset() {
     prisma.fileObject.deleteMany(),
     prisma.tenant.deleteMany(),
     prisma.tenancy.deleteMany(),
-    prisma.ownershipShare.deleteMany(),
+    prisma.propertyOwnership.deleteMany(),
     prisma.property.deleteMany(),
-    prisma.owner.deleteMany(),
+    prisma.beneficialOwner.deleteMany(),
+    prisma.portfolio.deleteMany(),
+    prisma.company.deleteMany(),
     prisma.auditLog.deleteMany(),
     prisma.membership.deleteMany(),
-    prisma.landlordEntity.deleteMany(),
-    prisma.session.deleteMany(),
     prisma.account.deleteMany(),
+    prisma.session.deleteMany(),
+    prisma.authAccount.deleteMany(),
     prisma.user.deleteMany(),
   ]);
 }
@@ -88,31 +90,39 @@ async function main() {
   // --- Users ---
   const landlord = await prisma.user.create({
     data: {
-      name: "Jordan Hayes",
+      firstName: "Jordan",
+      lastName: "Hayes",
       email: "landlord@example.com",
       passwordHash,
-      kind: UserKind.LANDLORD,
+      role: UserRole.OWNER,
+      mobile: "+447700900123",
+      mobileVerified: true,
+      numberOfPropertiesManaged: 2,
       emailVerified: new Date(),
     },
   });
 
   const accountant = await prisma.user.create({
     data: {
-      name: "Priya Accountant",
+      firstName: "Priya",
+      lastName: "Accountant",
       email: "accountant@example.com",
       passwordHash,
-      kind: UserKind.ACCOUNTANT,
+      role: UserRole.ACCOUNTANT,
       emailVerified: new Date(),
     },
   });
 
   // --- Entity A: individual landlord (rich data) ---
-  const entityA = await prisma.landlordEntity.create({
+  const entityA = await prisma.account.create({
     data: {
       displayName: "Hayes Property Portfolio",
       type: LandlordType.INDIVIDUAL,
       utr: "1234567890",
       mtdEnrolled: true,
+      subscriptionStatus: "active",
+      firstTaxYear: "2024-25",
+      timeZone: "Europe/London",
       principalUserId: landlord.id,
       memberships: {
         create: [
@@ -136,7 +146,7 @@ async function main() {
   });
 
   // --- Entity B: limited company (lighter data, shows switcher + company tax) ---
-  const entityB = await prisma.landlordEntity.create({
+  const entityB = await prisma.account.create({
     data: {
       displayName: "Hayes Lettings Ltd",
       type: LandlordType.LIMITED_COMPANY,
@@ -157,17 +167,57 @@ async function main() {
     },
   });
 
-  // --- Owners (beneficial / tax) for entity A: Jordan 70% + partner 30% ---
-  const ownerJordan = await prisma.owner.create({
+  // --- Portfolios: one default 'Personal — Default' per account ---
+  const defaultPortfolioA = await prisma.portfolio.create({
     data: {
-      landlordEntityId: entityA.id,
+      accountId: entityA.id,
+      name: "Personal — Default",
+      type: "personal",
+      isDefault: true,
+    },
+  });
+
+  // Entity B (limited company) gets a default personal portfolio + a business
+  // portfolio backed by a Company.
+  await prisma.portfolio.create({
+    data: {
+      accountId: entityB.id,
+      name: "Personal — Default",
+      type: "personal",
+      isDefault: true,
+    },
+  });
+  const companyB = await prisma.company.create({
+    data: {
+      accountId: entityB.id,
+      name: "Hayes Lettings Ltd",
+      companyNumber: "09876543",
+      utr: "9876543210",
+      vatRegistered: false,
+    },
+  });
+  const businessPortfolioB = await prisma.portfolio.create({
+    data: {
+      accountId: entityB.id,
+      name: "Hayes Lettings Ltd",
+      type: "business",
+      companyId: companyB.id,
+    },
+  });
+
+  // --- Beneficial owners for entity A: Jordan 70% + partner 30% ---
+  const ownerJordan = await prisma.beneficialOwner.create({
+    data: {
+      accountId: entityA.id,
+      type: "individual",
       userId: landlord.id,
       legalName: "Jordan Hayes",
     },
   });
-  const ownerSam = await prisma.owner.create({
+  const ownerSam = await prisma.beneficialOwner.create({
     data: {
-      landlordEntityId: entityA.id,
+      accountId: entityA.id,
+      type: "individual",
       legalName: "Sam Hayes",
     },
   });
@@ -175,7 +225,8 @@ async function main() {
   // --- Properties for entity A ---
   const prop1 = await prisma.property.create({
     data: {
-      landlordEntityId: entityA.id,
+      accountId: entityA.id,
+      portfolioId: defaultPortfolioA.id,
       addressLine1: "12 Oakfield Road",
       city: "Bristol",
       postcode: "BS6 5AB",
@@ -185,10 +236,10 @@ async function main() {
       purchasePricePence: 28_500_000,
       currentValuePence: 34_000_000,
       furnished: false,
-      ownershipShares: {
+      ownerships: {
         create: [
-          { ownerId: ownerJordan.id, percentageBp: 7000 },
-          { ownerId: ownerSam.id, percentageBp: 3000 },
+          { beneficialOwnerId: ownerJordan.id, ownershipPercentageBp: 7000 },
+          { beneficialOwnerId: ownerSam.id, ownershipPercentageBp: 3000 },
         ],
       },
     },
@@ -196,7 +247,8 @@ async function main() {
 
   const prop2 = await prisma.property.create({
     data: {
-      landlordEntityId: entityA.id,
+      accountId: entityA.id,
+      portfolioId: defaultPortfolioA.id,
       addressLine1: "Flat 4, 88 Wellington Court",
       city: "Bristol",
       postcode: "BS1 4TY",
@@ -206,16 +258,19 @@ async function main() {
       purchasePricePence: 21_000_000,
       currentValuePence: 23_500_000,
       furnished: true,
-      ownershipShares: {
-        create: [{ ownerId: ownerJordan.id, percentageBp: 10000 }],
+      ownerships: {
+        create: [
+          { beneficialOwnerId: ownerJordan.id, ownershipPercentageBp: 10000 },
+        ],
       },
     },
   });
 
-  // --- Property for entity B ---
+  // --- Property for entity B (in the business portfolio) ---
   const prop3 = await prisma.property.create({
     data: {
-      landlordEntityId: entityB.id,
+      accountId: entityB.id,
+      portfolioId: businessPortfolioB.id,
       addressLine1: "27 Castle Street",
       city: "Bath",
       postcode: "BA1 2SH",
@@ -392,7 +447,7 @@ async function main() {
   // Mark recent transactions UNRECONCILED so Transactions screen has work to do.
   await prisma.transaction.createMany({
     data: txns.map((t) => ({
-      landlordEntityId: t.entityId,
+      accountId: t.entityId,
       propertyId: t.propertyId,
       tenancyId: t.tenancyId,
       direction: t.direction,
@@ -465,7 +520,7 @@ async function main() {
     const offsets = [30, 14, 7, 1];
     await prisma.complianceDocument.create({
       data: {
-        landlordEntityId: entityForProp[c.propertyId],
+        accountId: entityForProp[c.propertyId],
         propertyId: c.propertyId,
         type: c.type,
         issuedDate: c.issued ?? daysFromNow(-330),
@@ -486,14 +541,14 @@ async function main() {
   await prisma.importantDate.createMany({
     data: [
       {
-        landlordEntityId: entityA.id,
+        accountId: entityA.id,
         propertyId: prop1.id,
         title: "Tenancy renewal — 12 Oakfield Road",
         date: daysFromNow(48),
         kind: "TENANCY_RENEWAL",
       },
       {
-        landlordEntityId: entityA.id,
+        accountId: entityA.id,
         propertyId: prop2.id,
         title: "Mortgage fixed rate ends",
         date: daysFromNow(95),
@@ -505,7 +560,7 @@ async function main() {
   // --- MTD connection + obligations for entity A (mock, enrolled) ---
   const mtd = await prisma.mtdConnection.create({
     data: {
-      landlordEntityId: entityA.id,
+      accountId: entityA.id,
       status: "CONNECTED",
       businessIncomeSourceId: "XBIS00000123456",
       expiresAt: daysFromNow(30),

@@ -15,7 +15,7 @@ export async function listTransactions(
   filters: TransactionFilters = {},
 ) {
   const where: Prisma.TransactionWhereInput = {
-    landlordEntityId: entityId,
+    accountId: entityId,
   };
   if (filters.propertyId) where.propertyId = filters.propertyId;
   if (filters.direction) where.direction = filters.direction;
@@ -31,7 +31,7 @@ export async function listTransactions(
       take: 200,
     }),
     prisma.property.findMany({
-      where: { landlordEntityId: entityId, archivedAt: null },
+      where: { accountId: entityId, archivedAt: null },
       select: { id: true, addressLine1: true },
       orderBy: { addressLine1: "asc" },
     }),
@@ -55,7 +55,7 @@ export async function listTransactions(
 /** Unreconciled bank-feed transactions that still need attention. */
 export async function listUnreconciled(entityId: string) {
   return prisma.transaction.findMany({
-    where: { landlordEntityId: entityId, status: TxnStatus.UNRECONCILED },
+    where: { accountId: entityId, status: TxnStatus.UNRECONCILED },
     include: { property: { select: { addressLine1: true } } },
     orderBy: { date: "desc" },
     take: 100,

@@ -20,13 +20,13 @@ export default async function PropertyTransactionsPage({
   const { entityId } = await getActiveContext();
 
   const property = await prisma.property.findFirst({
-    where: { id: propertyId, landlordEntityId: entityId },
+    where: { id: propertyId, accountId: entityId },
     select: { id: true },
   });
   if (!property) notFound();
 
   const transactions = await prisma.transaction.findMany({
-    where: { propertyId, landlordEntityId: entityId },
+    where: { propertyId, accountId: entityId },
     orderBy: { date: "desc" },
     take: 50,
   });

@@ -14,12 +14,13 @@ import {
   consumePasswordResetToken,
 } from "@/lib/auth/tokens";
 import { emailSender } from "@/lib/email";
+import { fullName } from "@/lib/format";
 import { forgotPasswordSchema, resetPasswordSchema } from "@/schemas/auth";
 import {
   LandlordType,
   MembershipRole,
   MembershipStatus,
-  UserKind,
+  UserRole,
 } from "@/lib/enums";
 
 export interface AuthFormState {
@@ -97,18 +98,29 @@ export async function registerAction(
   if (existing) return { error: "An account with that email already exists." };
 
   const passwordHash = await bcrypt.hash(password, 10);
+  const [firstName, ...rest] = name.trim().split(/\s+/);
+  const lastName = rest.join(" ") || null;
 
-  // Create the user, their first LandlordEntity, and an OWNER membership.
+  // Create the user, their first Account (with a default portfolio), and an
+  // OWNER membership.
   await prisma.user.create({
     data: {
-      name,
+      firstName,
+      lastName,
       email: email.toLowerCase(),
       passwordHash,
-      kind: UserKind.LANDLORD,
+      role: UserRole.OWNER,
       ownedEntities: {
         create: {
           displayName: entityName,
           type: entityType,
+          portfolios: {
+            create: {
+              name: "Personal — Default",
+              type: "personal",
+              isDefault: true,
+            },
+          },
         },
       },
     },
@@ -123,7 +135,7 @@ export async function registerAction(
   await prisma.membership.create({
     data: {
       userId: user.id,
-      landlordEntityId: entity.id,
+      accountId: entity.id,
       role: MembershipRole.OWNER,
       status: MembershipStatus.ACTIVE,
       acceptedAt: new Date(),
@@ -161,7 +173,7 @@ export async function requestEmailVerificationAction(): Promise<AuthFormState> {
   const raw = await createEmailVerifyToken(user.id);
   await emailSender.sendVerificationEmail({
     to: user.email,
-    name: user.name,
+    name: fullName(user),
     verifyUrl: `${appBaseUrl()}/verify-email/${raw}`,
   });
   return { success: "Verification email sent — check your inbox." };
@@ -199,7 +211,7 @@ export async function requestPasswordResetAction(
     const raw = await createPasswordResetToken(user.id);
     await emailSender.sendPasswordResetEmail({
       to: user.email,
-      name: user.name,
+      name: fullName(user),
       resetUrl: `${appBaseUrl()}/reset-password/${raw}`,
     });
   }

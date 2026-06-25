@@ -14,6 +14,7 @@ import {
 } from "@/lib/enums";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
+import { getDefaultPortfolio } from "@/services/shared";
 import {
   propertyCreateSchema,
   type PropertyCreateInput,
@@ -22,15 +23,18 @@ import {
 /**
  * Shared create logic — called by BOTH the server action below and the tRPC
  * `properties.create` mutation. Pure persistence; no redirect/revalidate so the
- * tRPC client can invalidate its own cache.
+ * tRPC client can invalidate its own cache. Properties without an explicit
+ * portfolio fall into the account's default portfolio.
  */
 export async function createPropertyCore(
   entityId: string,
-  input: PropertyCreateInput,
+  input: PropertyCreateInput & { portfolioId?: string },
 ) {
+  const portfolioId = input.portfolioId ?? (await getDefaultPortfolio(entityId)).id;
   return prisma.property.create({
     data: {
-      landlordEntityId: entityId,
+      accountId: entityId,
+      portfolioId,
       addressLine1: input.addressLine1,
       addressLine2: input.addressLine2 || null,
       city: input.city,
@@ -79,7 +83,7 @@ export async function createTenancyAction(formData: FormData) {
 
   // Verify the property belongs to the active entity.
   const property = await prisma.property.findFirst({
-    where: { id: d.propertyId, landlordEntityId: entityId },
+    where: { id: d.propertyId, accountId: entityId },
   });
   if (!property) throw new Error("Property not found");
 
@@ -123,7 +127,7 @@ export async function addComplianceDocAction(formData: FormData) {
   }
   const d = parsed.data;
   const property = await prisma.property.findFirst({
-    where: { id: d.propertyId, landlordEntityId: entityId },
+    where: { id: d.propertyId, accountId: entityId },
   });
   if (!property) throw new Error("Property not found");
 
@@ -131,7 +135,7 @@ export async function addComplianceDocAction(formData: FormData) {
   const expiry = new Date(d.expiryDate);
   await prisma.complianceDocument.create({
     data: {
-      landlordEntityId: entityId,
+      accountId: entityId,
       propertyId: d.propertyId,
       type: (d.type as ComplianceType) ?? ComplianceType.OTHER,
       expiryDate: expiry,

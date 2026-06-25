@@ -24,23 +24,27 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  passwordHash  String?
-  kind          String    @default("LANDLORD") // UserKind: LANDLORD | ACCOUNTANT | ASSISTANT | ADMIN
-  totpSecret    String? // base32 TOTP secret (set during enrolment)
-  totpEnabled   Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                        String    @id @default(cuid())
+  firstName                 String?
+  lastName                  String?
+  email                     String    @unique
+  emailVerified             DateTime?
+  mobile                    String?
+  mobileVerified            Boolean   @default(false)
+  image                     String?
+  passwordHash              String?
+  role                      String    @default("owner") // UserRole: owner | assistant | accountant
+  numberOfPropertiesManaged Int       @default(0)
+  totpSecret                String? // base32 TOTP secret (set during enrolment)
+  twoFactorEnabled          Boolean   @default(false)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
-  accounts             Account[]
+  authAccounts         AuthAccount[]
   sessions             Session[]
   memberships          Membership[]
-  ownedEntities        LandlordEntity[]         @relation("EntityPrincipal")
-  ownerRecords         Owner[]
+  ownedEntities        Account[]                @relation("EntityPrincipal")
+  ownerRecords         BeneficialOwner[]
   invitesSent          Membership[]             @relation("MembershipInviter")
   auditLogs            AuditLog[]
   uploadedFiles        FileObject[]
@@ -76,8 +80,9 @@ model PasswordResetToken {
   @@index([userId])
 }
 
-// Auth.js adapter models (kept for future OAuth; credentials flow uses JWT).
-model Account {
+// Auth.js OAuth account model — renamed from `Account` to free that name for the
+// tenant. Inert today (credentials + JWT; no PrismaAdapter), kept for future OAuth.
+model AuthAccount {
   id                String  @id @default(cuid())
   userId            String
   type              String
@@ -112,41 +117,93 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// The account-tenant boundary. All financial data hangs off a LandlordEntity.
-model LandlordEntity {
+// The top-level TENANT. Has many Users (via Membership), Portfolios, Properties.
+// All financial data is scoped by accountId.
+model Account {
   id              String   @id @default(cuid())
   displayName     String
-  type            String   @default("INDIVIDUAL") // LandlordType: INDIVIDUAL | PORTFOLIO | LIMITED_COMPANY
+  type            String   @default("INDIVIDUAL") // LandlordType: INDIVIDUAL | PORTFOLIO | LIMITED_COMPANY (kept for tax treatment)
   companyNumber   String?
   companyName     String?
   utr             String?
   vatRegistered   Boolean  @default(false)
   mtdEnrolled     Boolean  @default(false)
   principalUserId String
+  // Subscription / trial + preferences
+  subscriptionStatus String   @default("trialing") // SubscriptionStatus: trialing | active | past_due | canceled
+  trialEndsAt        DateTime?
+  firstTaxYear       String? // e.g. "2024-25"
+  timeZone           String   @default("Europe/London")
+  marketingOptIn     Boolean  @default(false)
+  notificationPrefs  Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  principal       User                 @relation("EntityPrincipal", fields: [principalUserId], references: [id])
-  memberships     Membership[]
-  owners          Owner[]
-  properties      Property[]
-  transactions    Transaction[]
-  bankConnections BankConnection[]
-  complianceDocs  ComplianceDocument[]
-  importantDates  ImportantDate[]
-  files           FileObject[]
-  taxEstimates    TaxYearEstimate[]
-  mtdConnection   MtdConnection?
-  auditLogs       AuditLog[]
+  principal        User                 @relation("EntityPrincipal", fields: [principalUserId], references: [id])
+  memberships      Membership[]
+  portfolios       Portfolio[]
+  companies        Company[]
+  beneficialOwners BeneficialOwner[]
+  properties       Property[]
+  transactions     Transaction[]
+  bankConnections  BankConnection[]
+  complianceDocs   ComplianceDocument[]
+  importantDates   ImportantDate[]
+  files            FileObject[]
+  taxEstimates     TaxYearEstimate[]
+  mtdConnection    MtdConnection?
+  auditLogs        AuditLog[]
 
   @@index([principalUserId])
 }
 
-// User <-> LandlordEntity link that powers multi-tenant + delegated access.
+// A grouping of properties within an account. Exactly one default 'Personal —
+// Default' portfolio per account (enforced by a partial unique index in the
+// migration). Property-less / untracked items fall into the default portfolio.
+model Portfolio {
+  id        String   @id @default(cuid())
+  accountId String
+  name      String
+  type      String   @default("personal") // PortfolioType: personal | business
+  isDefault Boolean  @default(false)
+  companyId String? // optional; business portfolios only (enforced in app code)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account    Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  company    Company?          @relation(fields: [companyId], references: [id])
+  properties Property[]
+  owners     BeneficialOwner[]
+
+  @@index([accountId])
+  // Partial unique (one default per account) added via raw SQL in the migration:
+  //   CREATE UNIQUE INDEX "Portfolio_one_default" ON "Portfolio"("accountId") WHERE "isDefault";
+}
+
+// Optional limited company linked to business portfolios (directors' loans,
+// company tax).
+model Company {
+  id            String   @id @default(cuid())
+  accountId     String
+  name          String
+  companyNumber String?
+  utr           String?
+  vatRegistered Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  account         Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  portfolios      Portfolio[]
+  beneficialOwners BeneficialOwner[]
+
+  @@index([accountId])
+}
+
+// User <-> Account link that powers multi-tenant + delegated access.
 model Membership {
   id              String   @id @default(cuid())
   userId          String
-  landlordEntityId String
+  accountId String
   role            String   @default("VIEWER") // MembershipRole: OWNER | MANAGER | ACCOUNTANT | ASSISTANT | VIEWER
   scope           Json?    // e.g. {"propertyIds":[...]} ; null = full entity
   status          String   @default("ACTIVE") // MembershipStatus: INVITED | ACTIVE | REVOKED
@@ -158,33 +215,38 @@ model Membership {
   updatedAt       DateTime @updatedAt
 
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  entity    LandlordEntity @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  entity    Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   invitedBy User?          @relation("MembershipInviter", fields: [invitedByUserId], references: [id])
 
-  @@unique([userId, landlordEntityId])
-  @@index([landlordEntityId])
+  @@unique([userId, accountId])
+  @@index([accountId])
 }
 
-// Beneficial / tax owner of properties (may be an external party with no login).
-model Owner {
-  id              String   @id @default(cuid())
-  landlordEntityId String
-  userId          String?
-  legalName       String
-  isCompany       Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+// An individual OR company that owns a percentage share of properties (and may
+// be associated with a portfolio). May be an external party with no login.
+model BeneficialOwner {
+  id         String   @id @default(cuid())
+  accountId  String
+  type       String   @default("individual") // BeneficialOwnerType: individual | company
+  legalName  String
+  userId     String?
+  companyId  String? // when type = company, may point at a Company
+  portfolioId String? // optional "links to Portfolio" association
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  entity          LandlordEntity   @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
-  user            User?            @relation(fields: [userId], references: [id])
-  ownershipShares OwnershipShare[]
+  account    Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user       User?               @relation(fields: [userId], references: [id])
+  company    Company?            @relation(fields: [companyId], references: [id])
+  portfolio  Portfolio?          @relation(fields: [portfolioId], references: [id])
+  ownerships PropertyOwnership[]
 
-  @@index([landlordEntityId])
+  @@index([accountId])
 }
 
 model AuditLog {
   id              String   @id @default(cuid())
-  landlordEntityId String
+  accountId String
   actorUserId     String?
   action          String
   targetType      String?
@@ -192,10 +254,10 @@ model AuditLog {
   metadata        Json?
   at              DateTime @default(now())
 
-  entity LandlordEntity @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  entity Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   actor  User?          @relation(fields: [actorUserId], references: [id])
 
-  @@index([landlordEntityId, at])
+  @@index([accountId, at])
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +266,8 @@ model AuditLog {
 
 model Property {
   id               String   @id @default(cuid())
-  landlordEntityId String
+  accountId        String
+  portfolioId      String
   addressLine1     String
   addressLine2     String?
   city             String
@@ -221,31 +284,35 @@ model Property {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  entity          LandlordEntity       @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
-  ownershipShares OwnershipShare[]
+  // accountId is the tenant/security boundary; portfolioId is the grouping.
+  entity          Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  portfolio       Portfolio           @relation(fields: [portfolioId], references: [id])
+  ownerships      PropertyOwnership[]
   tenancies       Tenancy[]
   transactions    Transaction[]
   complianceDocs  ComplianceDocument[]
   importantDates  ImportantDate[]
   files           FileObject[]
 
-  @@index([landlordEntityId])
+  @@index([accountId])
+  @@index([portfolioId])
 }
 
-model OwnershipShare {
-  id            String   @id @default(cuid())
-  propertyId    String
-  ownerId       String
-  percentageBp  Int // basis points, 0..10000 (5000 = 50%)
-  effectiveFrom DateTime @default(now())
-  effectiveTo   DateTime?
-  createdAt     DateTime @default(now())
+// Property *—* BeneficialOwner, carrying the ownership percentage (basis points).
+model PropertyOwnership {
+  id                    String   @id @default(cuid())
+  propertyId            String
+  beneficialOwnerId     String
+  ownershipPercentageBp Int // basis points, 0..10000 (5000 = 50%)
+  effectiveFrom         DateTime @default(now())
+  effectiveTo           DateTime?
+  createdAt             DateTime @default(now())
 
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  owner    Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  property        Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  beneficialOwner BeneficialOwner @relation(fields: [beneficialOwnerId], references: [id], onDelete: Cascade)
 
   @@index([propertyId])
-  @@index([ownerId])
+  @@index([beneficialOwnerId])
 }
 
 model Tenancy {
@@ -295,7 +362,7 @@ model Tenant {
 
 model Transaction {
   id               String   @id @default(cuid())
-  landlordEntityId String
+  accountId String
   propertyId       String?
   tenancyId        String?
   direction        String   // TxnDirection: INCOME | EXPENSE
@@ -313,7 +380,7 @@ model Transaction {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  entity      LandlordEntity   @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  entity      Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
   property    Property?        @relation(fields: [propertyId], references: [id])
   tenancy     Tenancy?         @relation(fields: [tenancyId], references: [id])
   bankTxn     BankTransaction? @relation(fields: [bankTransactionId], references: [id])
@@ -321,7 +388,7 @@ model Transaction {
   splits      Transaction[]    @relation("TxnSplit")
   attachment  FileObject?      @relation(fields: [attachmentFileId], references: [id])
 
-  @@index([landlordEntityId, date])
+  @@index([accountId, date])
   @@index([propertyId])
   @@index([tenancyId])
 }
@@ -366,7 +433,7 @@ model ArrearsAlert {
 
 model BankConnection {
   id                   String   @id @default(cuid())
-  landlordEntityId     String
+  accountId     String
   provider             String   @default("mock")
   providerConnectionId String
   institutionName      String?
@@ -377,10 +444,10 @@ model BankConnection {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  entity   LandlordEntity @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  entity   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   accounts BankAccount[]
 
-  @@index([landlordEntityId])
+  @@index([accountId])
 }
 
 model BankAccount {
@@ -421,7 +488,7 @@ model BankTransaction {
 
 model ComplianceDocument {
   id                  String   @id @default(cuid())
-  landlordEntityId    String
+  accountId    String
   propertyId          String?
   type                String   // ComplianceType: EPC | GAS_SAFETY | EICR | ...
   issuedDate          DateTime?
@@ -432,12 +499,12 @@ model ComplianceDocument {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  entity    LandlordEntity       @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  entity    Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
   property  Property?            @relation(fields: [propertyId], references: [id])
   file      FileObject?          @relation(fields: [fileId], references: [id])
   reminders ComplianceReminder[]
 
-  @@index([landlordEntityId])
+  @@index([accountId])
   @@index([expiryDate])
 }
 
@@ -457,7 +524,7 @@ model ComplianceReminder {
 
 model ImportantDate {
   id               String   @id @default(cuid())
-  landlordEntityId String
+  accountId String
   propertyId       String?
   tenancyId        String?
   title            String
@@ -466,15 +533,15 @@ model ImportantDate {
   notes            String?
   createdAt        DateTime @default(now())
 
-  entity   LandlordEntity @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  entity   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   property Property?      @relation(fields: [propertyId], references: [id])
 
-  @@index([landlordEntityId, date])
+  @@index([accountId, date])
 }
 
 model FileObject {
   id               String   @id @default(cuid())
-  landlordEntityId String
+  accountId String
   propertyId       String?
   tenancyId        String?
   filename         String
@@ -484,13 +551,13 @@ model FileObject {
   uploadedByUserId String?
   createdAt        DateTime @default(now())
 
-  entity         LandlordEntity       @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  entity         Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
   property       Property?            @relation(fields: [propertyId], references: [id])
   uploadedBy     User?                @relation(fields: [uploadedByUserId], references: [id])
   complianceDocs ComplianceDocument[]
   transactions   Transaction[]
 
-  @@index([landlordEntityId])
+  @@index([accountId])
 }
 
 // ---------------------------------------------------------------------------
@@ -499,7 +566,7 @@ model FileObject {
 
 model TaxYearEstimate {
   id                        String   @id @default(cuid())
-  landlordEntityId          String
+  accountId          String
   taxYearStart              DateTime // always 6 Apr
   taxYearLabel              String   // e.g. "2025-26"
   computedAt                DateTime @default(now())
@@ -513,14 +580,14 @@ model TaxYearEstimate {
   taxableProfitPence        Int
   estimatedTaxPence         Int?
 
-  entity LandlordEntity @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  entity Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  @@unique([landlordEntityId, taxYearStart])
+  @@unique([accountId, taxYearStart])
 }
 
 model MtdConnection {
   id                     String   @id @default(cuid())
-  landlordEntityId       String   @unique
+  accountId       String   @unique
   hmrcUserId             String?
   accessTokenEnc         String?
   refreshTokenEnc        String?
@@ -530,7 +597,7 @@ model MtdConnection {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  entity      LandlordEntity  @relation(fields: [landlordEntityId], references: [id], onDelete: Cascade)
+  entity      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   obligations MtdObligation[]
   submissions MtdSubmission[]
 }

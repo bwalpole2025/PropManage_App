@@ -1,14 +1,18 @@
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
-    "name" TEXT,
+    "firstName" TEXT,
+    "lastName" TEXT,
     "email" TEXT NOT NULL,
     "emailVerified" TIMESTAMP(3),
+    "mobile" TEXT,
+    "mobileVerified" BOOLEAN NOT NULL DEFAULT false,
     "image" TEXT,
     "passwordHash" TEXT,
-    "kind" TEXT NOT NULL DEFAULT 'LANDLORD',
+    "role" TEXT NOT NULL DEFAULT 'owner',
+    "numberOfPropertiesManaged" INTEGER NOT NULL DEFAULT 0,
     "totpSecret" TEXT,
-    "totpEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -40,7 +44,7 @@ CREATE TABLE "PasswordResetToken" (
 );
 
 -- CreateTable
-CREATE TABLE "Account" (
+CREATE TABLE "AuthAccount" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "type" TEXT NOT NULL,
@@ -54,7 +58,7 @@ CREATE TABLE "Account" (
     "id_token" TEXT,
     "session_state" TEXT,
 
-    CONSTRAINT "Account_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "AuthAccount_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -75,7 +79,7 @@ CREATE TABLE "VerificationToken" (
 );
 
 -- CreateTable
-CREATE TABLE "LandlordEntity" (
+CREATE TABLE "Account" (
     "id" TEXT NOT NULL,
     "displayName" TEXT NOT NULL,
     "type" TEXT NOT NULL DEFAULT 'INDIVIDUAL',
@@ -85,17 +89,51 @@ CREATE TABLE "LandlordEntity" (
     "vatRegistered" BOOLEAN NOT NULL DEFAULT false,
     "mtdEnrolled" BOOLEAN NOT NULL DEFAULT false,
     "principalUserId" TEXT NOT NULL,
+    "subscriptionStatus" TEXT NOT NULL DEFAULT 'trialing',
+    "trialEndsAt" TIMESTAMP(3),
+    "firstTaxYear" TEXT,
+    "timeZone" TEXT NOT NULL DEFAULT 'Europe/London',
+    "marketingOptIn" BOOLEAN NOT NULL DEFAULT false,
+    "notificationPrefs" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "LandlordEntity_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Account_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Portfolio" (
+    "id" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'personal',
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "companyId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Portfolio_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Company" (
+    "id" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "companyNumber" TEXT,
+    "utr" TEXT,
+    "vatRegistered" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Company_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Membership" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
     "role" TEXT NOT NULL DEFAULT 'VIEWER',
     "scope" JSONB,
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
@@ -110,22 +148,24 @@ CREATE TABLE "Membership" (
 );
 
 -- CreateTable
-CREATE TABLE "Owner" (
+CREATE TABLE "BeneficialOwner" (
     "id" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
-    "userId" TEXT,
+    "accountId" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'individual',
     "legalName" TEXT NOT NULL,
-    "isCompany" BOOLEAN NOT NULL DEFAULT false,
+    "userId" TEXT,
+    "companyId" TEXT,
+    "portfolioId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Owner_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "BeneficialOwner_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "AuditLog" (
     "id" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
     "actorUserId" TEXT,
     "action" TEXT NOT NULL,
     "targetType" TEXT,
@@ -139,7 +179,8 @@ CREATE TABLE "AuditLog" (
 -- CreateTable
 CREATE TABLE "Property" (
     "id" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "portfolioId" TEXT NOT NULL,
     "addressLine1" TEXT NOT NULL,
     "addressLine2" TEXT,
     "city" TEXT NOT NULL,
@@ -160,16 +201,16 @@ CREATE TABLE "Property" (
 );
 
 -- CreateTable
-CREATE TABLE "OwnershipShare" (
+CREATE TABLE "PropertyOwnership" (
     "id" TEXT NOT NULL,
     "propertyId" TEXT NOT NULL,
-    "ownerId" TEXT NOT NULL,
-    "percentageBp" INTEGER NOT NULL,
+    "beneficialOwnerId" TEXT NOT NULL,
+    "ownershipPercentageBp" INTEGER NOT NULL,
     "effectiveFrom" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "effectiveTo" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "OwnershipShare_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "PropertyOwnership_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -209,7 +250,7 @@ CREATE TABLE "Tenant" (
 -- CreateTable
 CREATE TABLE "Transaction" (
     "id" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
     "propertyId" TEXT,
     "tenancyId" TEXT,
     "direction" TEXT NOT NULL,
@@ -261,7 +302,7 @@ CREATE TABLE "ArrearsAlert" (
 -- CreateTable
 CREATE TABLE "BankConnection" (
     "id" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
     "provider" TEXT NOT NULL DEFAULT 'mock',
     "providerConnectionId" TEXT NOT NULL,
     "institutionName" TEXT,
@@ -306,7 +347,7 @@ CREATE TABLE "BankTransaction" (
 -- CreateTable
 CREATE TABLE "ComplianceDocument" (
     "id" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
     "propertyId" TEXT,
     "type" TEXT NOT NULL,
     "issuedDate" TIMESTAMP(3),
@@ -335,7 +376,7 @@ CREATE TABLE "ComplianceReminder" (
 -- CreateTable
 CREATE TABLE "ImportantDate" (
     "id" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
     "propertyId" TEXT,
     "tenancyId" TEXT,
     "title" TEXT NOT NULL,
@@ -350,7 +391,7 @@ CREATE TABLE "ImportantDate" (
 -- CreateTable
 CREATE TABLE "FileObject" (
     "id" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
     "propertyId" TEXT,
     "tenancyId" TEXT,
     "filename" TEXT NOT NULL,
@@ -366,7 +407,7 @@ CREATE TABLE "FileObject" (
 -- CreateTable
 CREATE TABLE "TaxYearEstimate" (
     "id" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
     "taxYearStart" TIMESTAMP(3) NOT NULL,
     "taxYearLabel" TEXT NOT NULL,
     "computedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -386,7 +427,7 @@ CREATE TABLE "TaxYearEstimate" (
 -- CreateTable
 CREATE TABLE "MtdConnection" (
     "id" TEXT NOT NULL,
-    "landlordEntityId" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
     "hmrcUserId" TEXT,
     "accessTokenEnc" TEXT,
     "refreshTokenEnc" TEXT,
@@ -448,7 +489,7 @@ CREATE UNIQUE INDEX "PasswordResetToken_tokenHash_key" ON "PasswordResetToken"("
 CREATE INDEX "PasswordResetToken_userId_idx" ON "PasswordResetToken"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Account_provider_providerAccountId_key" ON "Account"("provider", "providerAccountId");
+CREATE UNIQUE INDEX "AuthAccount_provider_providerAccountId_key" ON "AuthAccount"("provider", "providerAccountId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Session_sessionToken_key" ON "Session"("sessionToken");
@@ -460,31 +501,40 @@ CREATE UNIQUE INDEX "VerificationToken_token_key" ON "VerificationToken"("token"
 CREATE UNIQUE INDEX "VerificationToken_identifier_token_key" ON "VerificationToken"("identifier", "token");
 
 -- CreateIndex
-CREATE INDEX "LandlordEntity_principalUserId_idx" ON "LandlordEntity"("principalUserId");
+CREATE INDEX "Account_principalUserId_idx" ON "Account"("principalUserId");
+
+-- CreateIndex
+CREATE INDEX "Portfolio_accountId_idx" ON "Portfolio"("accountId");
+
+-- CreateIndex
+CREATE INDEX "Company_accountId_idx" ON "Company"("accountId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Membership_inviteToken_key" ON "Membership"("inviteToken");
 
 -- CreateIndex
-CREATE INDEX "Membership_landlordEntityId_idx" ON "Membership"("landlordEntityId");
+CREATE INDEX "Membership_accountId_idx" ON "Membership"("accountId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Membership_userId_landlordEntityId_key" ON "Membership"("userId", "landlordEntityId");
+CREATE UNIQUE INDEX "Membership_userId_accountId_key" ON "Membership"("userId", "accountId");
 
 -- CreateIndex
-CREATE INDEX "Owner_landlordEntityId_idx" ON "Owner"("landlordEntityId");
+CREATE INDEX "BeneficialOwner_accountId_idx" ON "BeneficialOwner"("accountId");
 
 -- CreateIndex
-CREATE INDEX "AuditLog_landlordEntityId_at_idx" ON "AuditLog"("landlordEntityId", "at");
+CREATE INDEX "AuditLog_accountId_at_idx" ON "AuditLog"("accountId", "at");
 
 -- CreateIndex
-CREATE INDEX "Property_landlordEntityId_idx" ON "Property"("landlordEntityId");
+CREATE INDEX "Property_accountId_idx" ON "Property"("accountId");
 
 -- CreateIndex
-CREATE INDEX "OwnershipShare_propertyId_idx" ON "OwnershipShare"("propertyId");
+CREATE INDEX "Property_portfolioId_idx" ON "Property"("portfolioId");
 
 -- CreateIndex
-CREATE INDEX "OwnershipShare_ownerId_idx" ON "OwnershipShare"("ownerId");
+CREATE INDEX "PropertyOwnership_propertyId_idx" ON "PropertyOwnership"("propertyId");
+
+-- CreateIndex
+CREATE INDEX "PropertyOwnership_beneficialOwnerId_idx" ON "PropertyOwnership"("beneficialOwnerId");
 
 -- CreateIndex
 CREATE INDEX "Tenancy_propertyId_idx" ON "Tenancy"("propertyId");
@@ -499,7 +549,7 @@ CREATE INDEX "Tenant_tenancyId_idx" ON "Tenant"("tenancyId");
 CREATE UNIQUE INDEX "Transaction_bankTransactionId_key" ON "Transaction"("bankTransactionId");
 
 -- CreateIndex
-CREATE INDEX "Transaction_landlordEntityId_date_idx" ON "Transaction"("landlordEntityId", "date");
+CREATE INDEX "Transaction_accountId_date_idx" ON "Transaction"("accountId", "date");
 
 -- CreateIndex
 CREATE INDEX "Transaction_propertyId_idx" ON "Transaction"("propertyId");
@@ -517,7 +567,7 @@ CREATE UNIQUE INDEX "RentScheduleEntry_tenancyId_dueDate_key" ON "RentScheduleEn
 CREATE INDEX "ArrearsAlert_tenancyId_idx" ON "ArrearsAlert"("tenancyId");
 
 -- CreateIndex
-CREATE INDEX "BankConnection_landlordEntityId_idx" ON "BankConnection"("landlordEntityId");
+CREATE INDEX "BankConnection_accountId_idx" ON "BankConnection"("accountId");
 
 -- CreateIndex
 CREATE INDEX "BankAccount_bankConnectionId_idx" ON "BankAccount"("bankConnectionId");
@@ -529,7 +579,7 @@ CREATE UNIQUE INDEX "BankTransaction_providerTxnId_key" ON "BankTransaction"("pr
 CREATE INDEX "BankTransaction_bankAccountId_date_idx" ON "BankTransaction"("bankAccountId", "date");
 
 -- CreateIndex
-CREATE INDEX "ComplianceDocument_landlordEntityId_idx" ON "ComplianceDocument"("landlordEntityId");
+CREATE INDEX "ComplianceDocument_accountId_idx" ON "ComplianceDocument"("accountId");
 
 -- CreateIndex
 CREATE INDEX "ComplianceDocument_expiryDate_idx" ON "ComplianceDocument"("expiryDate");
@@ -541,16 +591,16 @@ CREATE INDEX "ComplianceReminder_complianceDocumentId_idx" ON "ComplianceReminde
 CREATE INDEX "ComplianceReminder_fireOn_status_idx" ON "ComplianceReminder"("fireOn", "status");
 
 -- CreateIndex
-CREATE INDEX "ImportantDate_landlordEntityId_date_idx" ON "ImportantDate"("landlordEntityId", "date");
+CREATE INDEX "ImportantDate_accountId_date_idx" ON "ImportantDate"("accountId", "date");
 
 -- CreateIndex
-CREATE INDEX "FileObject_landlordEntityId_idx" ON "FileObject"("landlordEntityId");
+CREATE INDEX "FileObject_accountId_idx" ON "FileObject"("accountId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "TaxYearEstimate_landlordEntityId_taxYearStart_key" ON "TaxYearEstimate"("landlordEntityId", "taxYearStart");
+CREATE UNIQUE INDEX "TaxYearEstimate_accountId_taxYearStart_key" ON "TaxYearEstimate"("accountId", "taxYearStart");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "MtdConnection_landlordEntityId_key" ON "MtdConnection"("landlordEntityId");
+CREATE UNIQUE INDEX "MtdConnection_accountId_key" ON "MtdConnection"("accountId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "MtdObligation_mtdConnectionId_periodKey_key" ON "MtdObligation"("mtdConnectionId", "periodKey");
@@ -565,43 +615,61 @@ ALTER TABLE "EmailVerificationToken" ADD CONSTRAINT "EmailVerificationToken_user
 ALTER TABLE "PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AuthAccount" ADD CONSTRAINT "AuthAccount_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "LandlordEntity" ADD CONSTRAINT "LandlordEntity_principalUserId_fkey" FOREIGN KEY ("principalUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Account" ADD CONSTRAINT "Account_principalUserId_fkey" FOREIGN KEY ("principalUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Portfolio" ADD CONSTRAINT "Portfolio_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Portfolio" ADD CONSTRAINT "Portfolio_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Company" ADD CONSTRAINT "Company_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Membership" ADD CONSTRAINT "Membership_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Membership" ADD CONSTRAINT "Membership_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Membership" ADD CONSTRAINT "Membership_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Membership" ADD CONSTRAINT "Membership_invitedByUserId_fkey" FOREIGN KEY ("invitedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Owner" ADD CONSTRAINT "Owner_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "BeneficialOwner" ADD CONSTRAINT "BeneficialOwner_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Owner" ADD CONSTRAINT "Owner_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "BeneficialOwner" ADD CONSTRAINT "BeneficialOwner_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "BeneficialOwner" ADD CONSTRAINT "BeneficialOwner_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BeneficialOwner" ADD CONSTRAINT "BeneficialOwner_portfolioId_fkey" FOREIGN KEY ("portfolioId") REFERENCES "Portfolio"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorUserId_fkey" FOREIGN KEY ("actorUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Property" ADD CONSTRAINT "Property_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Property" ADD CONSTRAINT "Property_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "OwnershipShare" ADD CONSTRAINT "OwnershipShare_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Property" ADD CONSTRAINT "Property_portfolioId_fkey" FOREIGN KEY ("portfolioId") REFERENCES "Portfolio"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "OwnershipShare" ADD CONSTRAINT "OwnershipShare_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "Owner"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "PropertyOwnership" ADD CONSTRAINT "PropertyOwnership_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PropertyOwnership" ADD CONSTRAINT "PropertyOwnership_beneficialOwnerId_fkey" FOREIGN KEY ("beneficialOwnerId") REFERENCES "BeneficialOwner"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Tenancy" ADD CONSTRAINT "Tenancy_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -610,7 +678,7 @@ ALTER TABLE "Tenancy" ADD CONSTRAINT "Tenancy_propertyId_fkey" FOREIGN KEY ("pro
 ALTER TABLE "Tenant" ADD CONSTRAINT "Tenant_tenancyId_fkey" FOREIGN KEY ("tenancyId") REFERENCES "Tenancy"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -637,7 +705,7 @@ ALTER TABLE "ArrearsAlert" ADD CONSTRAINT "ArrearsAlert_tenancyId_fkey" FOREIGN 
 ALTER TABLE "ArrearsAlert" ADD CONSTRAINT "ArrearsAlert_rentScheduleEntryId_fkey" FOREIGN KEY ("rentScheduleEntryId") REFERENCES "RentScheduleEntry"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "BankConnection" ADD CONSTRAINT "BankConnection_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "BankConnection" ADD CONSTRAINT "BankConnection_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "BankAccount" ADD CONSTRAINT "BankAccount_bankConnectionId_fkey" FOREIGN KEY ("bankConnectionId") REFERENCES "BankConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -646,7 +714,7 @@ ALTER TABLE "BankAccount" ADD CONSTRAINT "BankAccount_bankConnectionId_fkey" FOR
 ALTER TABLE "BankTransaction" ADD CONSTRAINT "BankTransaction_bankAccountId_fkey" FOREIGN KEY ("bankAccountId") REFERENCES "BankAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -658,13 +726,13 @@ ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_fileId_fkey"
 ALTER TABLE "ComplianceReminder" ADD CONSTRAINT "ComplianceReminder_complianceDocumentId_fkey" FOREIGN KEY ("complianceDocumentId") REFERENCES "ComplianceDocument"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ImportantDate" ADD CONSTRAINT "ImportantDate_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ImportantDate" ADD CONSTRAINT "ImportantDate_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ImportantDate" ADD CONSTRAINT "ImportantDate_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "FileObject" ADD CONSTRAINT "FileObject_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "FileObject" ADD CONSTRAINT "FileObject_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "FileObject" ADD CONSTRAINT "FileObject_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -673,10 +741,10 @@ ALTER TABLE "FileObject" ADD CONSTRAINT "FileObject_propertyId_fkey" FOREIGN KEY
 ALTER TABLE "FileObject" ADD CONSTRAINT "FileObject_uploadedByUserId_fkey" FOREIGN KEY ("uploadedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "TaxYearEstimate" ADD CONSTRAINT "TaxYearEstimate_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "TaxYearEstimate" ADD CONSTRAINT "TaxYearEstimate_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "MtdConnection" ADD CONSTRAINT "MtdConnection_landlordEntityId_fkey" FOREIGN KEY ("landlordEntityId") REFERENCES "LandlordEntity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "MtdConnection" ADD CONSTRAINT "MtdConnection_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MtdObligation" ADD CONSTRAINT "MtdObligation_mtdConnectionId_fkey" FOREIGN KEY ("mtdConnectionId") REFERENCES "MtdConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -686,3 +754,7 @@ ALTER TABLE "MtdSubmission" ADD CONSTRAINT "MtdSubmission_mtdConnectionId_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "MtdSubmission" ADD CONSTRAINT "MtdSubmission_obligationId_fkey" FOREIGN KEY ("obligationId") REFERENCES "MtdObligation"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- One default ('Personal — Default') portfolio per account (partial unique index;
+-- not expressible in the Prisma schema, so added here).
+CREATE UNIQUE INDEX "Portfolio_one_default" ON "Portfolio"("accountId") WHERE "isDefault";

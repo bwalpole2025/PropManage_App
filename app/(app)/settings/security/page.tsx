@@ -6,13 +6,13 @@ export default async function SecuritySettingsPage() {
   const ctx = await getActiveContext();
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: ctx.user.id },
-    select: { emailVerified: true, totpEnabled: true },
+    select: { emailVerified: true, twoFactorEnabled: true },
   });
 
   return (
     <SecurityForm
       emailVerified={!!user.emailVerified}
-      totpEnabled={user.totpEnabled}
+      twoFactorEnabled={user.twoFactorEnabled}
     />
   );
 }

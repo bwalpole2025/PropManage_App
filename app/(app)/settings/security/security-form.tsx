@@ -23,15 +23,15 @@ import {
 
 export function SecurityForm({
   emailVerified,
-  totpEnabled,
+  twoFactorEnabled,
 }: {
   emailVerified: boolean;
-  totpEnabled: boolean;
+  twoFactorEnabled: boolean;
 }) {
   return (
     <div className="space-y-6">
       <EmailVerificationCard verified={emailVerified} />
-      <TotpCard enabled={totpEnabled} />
+      <TotpCard enabled={twoFactorEnabled} />
     </div>
   );
 }

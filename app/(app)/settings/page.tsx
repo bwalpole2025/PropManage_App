@@ -1,5 +1,7 @@
 import { getActiveContext } from "@/lib/auth/active-org";
 import { prisma } from "@/lib/db";
+import { fullName } from "@/lib/format";
+import { UserRoleLabel, type UserRole } from "@/lib/enums";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,7 +11,7 @@ export default async function ProfileSettingsPage() {
   const ctx = await getActiveContext();
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: ctx.user.id },
-    select: { name: true, email: true, kind: true },
+    select: { firstName: true, lastName: true, email: true, role: true },
   });
 
   return (
@@ -23,16 +25,18 @@ export default async function ProfileSettingsPage() {
       <CardContent className="space-y-4">
         <div>
           <Label htmlFor="name">Name</Label>
-          <Input id="name" defaultValue={user.name ?? ""} disabled />
+          <Input id="name" defaultValue={fullName(user, "")} disabled />
         </div>
         <div>
           <Label htmlFor="email">Email</Label>
           <Input id="email" defaultValue={user.email ?? ""} disabled />
         </div>
         <div>
-          <Label>Account type</Label>
+          <Label>Role</Label>
           <div>
-            <Badge tone="primary">{user.kind}</Badge>
+            <Badge tone="primary">
+              {UserRoleLabel[user.role as UserRole] ?? user.role}
+            </Badge>
           </div>
         </div>
         <Button disabled>Save changes (soon)</Button>

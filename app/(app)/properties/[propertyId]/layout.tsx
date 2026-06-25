@@ -17,7 +17,7 @@ export default async function PropertyLayout({
   const { propertyId } = await params;
   const { entityId } = await getActiveContext();
   const property = await prisma.property.findFirst({
-    where: { id: propertyId, landlordEntityId: entityId },
+    where: { id: propertyId, accountId: entityId },
   });
   if (!property) notFound();
 

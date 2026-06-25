@@ -13,7 +13,7 @@ export async function setActiveEntityAction(entityId: string) {
   // Only allow switching to an entity the user actually belongs to.
   const membership = await prisma.membership.findUnique({
     where: {
-      userId_landlordEntityId: { userId: user.id, landlordEntityId: entityId },
+      userId_accountId: { userId: user.id, accountId: entityId },
     },
   });
   if (!membership || membership.status !== MembershipStatus.ACTIVE) {

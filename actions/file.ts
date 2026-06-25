@@ -27,7 +27,7 @@ export async function uploadFileAction(formData: FormData) {
   // Verify any referenced rows belong to the active account.
   if (propertyId) {
     const ok = await prisma.property.findFirst({
-      where: { id: propertyId, landlordEntityId: entityId },
+      where: { id: propertyId, accountId: entityId },
       select: { id: true },
     });
     if (!ok) throw new Error("Property not found");
@@ -44,7 +44,7 @@ export async function uploadFileAction(formData: FormData) {
 
   const record = await prisma.fileObject.create({
     data: {
-      landlordEntityId: entityId,
+      accountId: entityId,
       propertyId,
       filename: file.name,
       mimeType: file.type || "application/octet-stream",
@@ -56,13 +56,13 @@ export async function uploadFileAction(formData: FormData) {
 
   if (complianceDocId) {
     await prisma.complianceDocument.updateMany({
-      where: { id: complianceDocId, landlordEntityId: entityId },
+      where: { id: complianceDocId, accountId: entityId },
       data: { fileId: record.id },
     });
   }
   if (transactionId) {
     await prisma.transaction.updateMany({
-      where: { id: transactionId, landlordEntityId: entityId },
+      where: { id: transactionId, accountId: entityId },
       data: { attachmentFileId: record.id },
     });
   }

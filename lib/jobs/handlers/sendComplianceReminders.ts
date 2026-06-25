@@ -15,7 +15,7 @@ export async function sendComplianceReminders(
       status: ReminderStatus.PENDING,
       fireOn: { lte: new Date() },
       ...(data.entityId
-        ? { document: { landlordEntityId: data.entityId } }
+        ? { document: { accountId: data.entityId } }
         : {}),
     },
     include: { document: { include: { property: true } } },

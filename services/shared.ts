@@ -6,7 +6,23 @@ import type { TxnForEstimate } from "@/lib/tax";
 
 /** Entity record (incl. type) — used to branch tax treatment. */
 export async function getEntity(entityId: string) {
-  return prisma.landlordEntity.findUniqueOrThrow({ where: { id: entityId } });
+  return prisma.account.findUniqueOrThrow({ where: { id: entityId } });
+}
+
+/**
+ * The account's default ('Personal — Default') portfolio. Untracked items and
+ * properties created without an explicit portfolio fall into this one. Falls
+ * back to the first portfolio if no default is flagged.
+ */
+export async function getDefaultPortfolio(accountId: string) {
+  const found = await prisma.portfolio.findFirst({
+    where: { accountId, isDefault: true },
+  });
+  if (found) return found;
+  return prisma.portfolio.findFirstOrThrow({
+    where: { accountId },
+    orderBy: { createdAt: "asc" },
+  });
 }
 
 /**
@@ -21,7 +37,7 @@ export async function getTaxYearTxns(
   const end = taxYearEndDate(taxYearLabel);
   const rows = await prisma.transaction.findMany({
     where: {
-      landlordEntityId: entityId,
+      accountId: entityId,
       date: { gte: start, lte: end },
       status: { not: TxnStatus.EXCLUDED },
       category: { not: null },

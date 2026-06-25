@@ -69,7 +69,7 @@ export default async function AcceptInvitePage({
                     <Input
                       id="name"
                       name="name"
-                      defaultValue={membership!.user.name ?? ""}
+                      defaultValue={[membership!.user.firstName, membership!.user.lastName].filter(Boolean).join(" ")}
                       required
                     />
                   </div>

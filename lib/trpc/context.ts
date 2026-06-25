@@ -31,7 +31,7 @@ export async function createContextInner(
         id: session.user.id,
         name: session.user.name,
         email: session.user.email,
-        kind: session.user.kind,
+        role: session.user.role,
       }
     : null;
 

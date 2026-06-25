@@ -34,7 +34,7 @@ export async function createTransactionAction(formData: FormData) {
   // If a property is supplied, ensure it belongs to the entity.
   if (d.propertyId) {
     const prop = await prisma.property.findFirst({
-      where: { id: d.propertyId, landlordEntityId: entityId },
+      where: { id: d.propertyId, accountId: entityId },
       select: { id: true },
     });
     if (!prop) throw new Error("Property not found");
@@ -42,7 +42,7 @@ export async function createTransactionAction(formData: FormData) {
 
   await prisma.transaction.create({
     data: {
-      landlordEntityId: entityId,
+      accountId: entityId,
       propertyId: d.propertyId || null,
       direction,
       amountPence: poundsToPence(d.amount),
@@ -72,7 +72,7 @@ export async function categoriseTransactionAction(
   if (!isSa105Category(category)) throw new Error("Unknown category");
 
   const txn = await prisma.transaction.findFirst({
-    where: { id: transactionId, landlordEntityId: entityId },
+    where: { id: transactionId, accountId: entityId },
     select: { id: true },
   });
   if (!txn) throw new Error("Transaction not found");
@@ -95,7 +95,7 @@ export async function reconcileTransactionAction(transactionId: string) {
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
 
   const txn = await prisma.transaction.findFirst({
-    where: { id: transactionId, landlordEntityId: entityId },
+    where: { id: transactionId, accountId: entityId },
     select: { id: true },
   });
   if (!txn) throw new Error("Transaction not found");

@@ -1,18 +1,19 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../db";
+import { fullName } from "../format";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
 
+// No PrismaAdapter: we use Credentials + JWT sessions, so the adapter's
+// AuthAccount/Session tables are not needed (the `authorize` callback does its
+// own user lookup).
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  adapter: PrismaAdapter(prisma),
-  // Credentials provider requires JWT sessions (no DB session row to read).
   session: { strategy: "jwt" },
   trustHost: true,
   pages: {
@@ -39,10 +40,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         return {
           id: user.id,
-          name: user.name,
+          name: fullName(user),
           email: user.email,
           image: user.image,
-          kind: user.kind,
+          role: user.role,
         };
       },
     }),
@@ -51,14 +52,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     jwt({ token, user }) {
       if (user) {
         token.uid = user.id;
-        token.kind = user.kind;
+        token.role = (user as { role?: string }).role;
       }
       return token;
     },
     session({ session, token }) {
       if (session.user) {
         if (token.uid) session.user.id = token.uid as string;
-        if (token.kind) session.user.kind = token.kind as string;
+        if (token.role) session.user.role = token.role as string;
       }
       return session;
     },

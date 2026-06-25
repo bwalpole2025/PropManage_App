@@ -5,7 +5,7 @@ import { services } from "@/lib/services";
 export async function getMtdOverview(entityId: string) {
   const taxYear = taxYearLabelFor();
   const connection = await prisma.mtdConnection.findUnique({
-    where: { landlordEntityId: entityId },
+    where: { accountId: entityId },
   });
 
   // Obligations come from the (mock) HMRC service behind the clean interface.

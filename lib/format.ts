@@ -1,5 +1,14 @@
 // Display formatters. Money is stored as integer pence everywhere.
 
+/** Compose a display name from first/last name, with a sensible fallback. */
+export function fullName(
+  u: { firstName?: string | null; lastName?: string | null; email?: string | null },
+  fallback = "User",
+): string {
+  const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+  return name || u.email || fallback;
+}
+
 /** Format integer pence as GBP, e.g. 125000 -> "£1,250.00". */
 export function formatPence(
   pence: number,

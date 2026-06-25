@@ -14,7 +14,7 @@ export async function pollBankFeed(data: JobPayloads["pollBankFeed"]) {
   const connections = await prisma.bankConnection.findMany({
     where: {
       status: BankConnStatus.ACTIVE,
-      ...(data.entityId ? { landlordEntityId: data.entityId } : {}),
+      ...(data.entityId ? { accountId: data.entityId } : {}),
     },
     include: { accounts: true },
   });

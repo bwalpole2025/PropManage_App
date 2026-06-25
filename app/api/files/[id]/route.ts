@@ -19,7 +19,7 @@ export async function GET(
   }
 
   const file = await prisma.fileObject.findFirst({
-    where: { id, landlordEntityId: entityId },
+    where: { id, accountId: entityId },
   });
   if (!file) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

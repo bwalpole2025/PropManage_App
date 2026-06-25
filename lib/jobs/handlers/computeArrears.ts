@@ -16,7 +16,7 @@ export async function computeArrears(data: JobPayloads["computeArrears"]) {
       tenancy: {
         status: TenancyStatus.ACTIVE,
         ...(data.entityId
-          ? { property: { landlordEntityId: data.entityId } }
+          ? { property: { accountId: data.entityId } }
           : {}),
       },
       status: { not: RentStatus.WAIVED },

@@ -16,8 +16,8 @@ export default async function OwnersPage({
   const property = await getProperty(entityId, propertyId);
   if (!property) notFound();
 
-  const shares = property.ownershipShares;
-  const totalBp = shares.reduce((s, o) => s + o.percentageBp, 0);
+  const shares = property.ownerships;
+  const totalBp = shares.reduce((s, o) => s + o.ownershipPercentageBp, 0);
 
   return (
     <div className="space-y-4">
@@ -44,12 +44,18 @@ export default async function OwnersPage({
                   className="flex items-center justify-between rounded-md border border-border p-3"
                 >
                   <div>
-                    <p className="text-sm font-medium">{s.owner.legalName}</p>
+                    <p className="text-sm font-medium">
+                      {s.beneficialOwner.legalName}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {s.owner.isCompany ? "Company" : "Individual"}
+                      {s.beneficialOwner.type === "company"
+                        ? "Company"
+                        : "Individual"}
                     </p>
                   </div>
-                  <Badge tone="primary">{(s.percentageBp / 100).toFixed(0)}%</Badge>
+                  <Badge tone="primary">
+                    {(s.ownershipPercentageBp / 100).toFixed(0)}%
+                  </Badge>
                 </div>
               ))}
               <div className="flex items-center justify-between px-3 pt-1 text-sm">

@@ -54,14 +54,14 @@ export async function getDashboardData(
 
   const [propertyCount, tenancyCount, txnCount, txns, schedule, compliance] =
     await Promise.all([
-      prisma.property.count({ where: { landlordEntityId: entityId } }),
+      prisma.property.count({ where: { accountId: entityId } }),
       prisma.tenancy.count({
-        where: { property: { landlordEntityId: entityId } },
+        where: { property: { accountId: entityId } },
       }),
-      prisma.transaction.count({ where: { landlordEntityId: entityId } }),
+      prisma.transaction.count({ where: { accountId: entityId } }),
       prisma.transaction.findMany({
         where: {
-          landlordEntityId: entityId,
+          accountId: entityId,
           date: { gte: start, lte: end },
           status: { not: TxnStatus.EXCLUDED },
         },
@@ -71,7 +71,7 @@ export async function getDashboardData(
         where: {
           tenancy: {
             status: TenancyStatus.ACTIVE,
-            property: { landlordEntityId: entityId },
+            property: { accountId: entityId },
           },
           status: { in: [RentStatus.OVERDUE, RentStatus.PARTIAL] },
         },
@@ -87,7 +87,7 @@ export async function getDashboardData(
       }),
       prisma.complianceDocument.findMany({
         where: {
-          landlordEntityId: entityId,
+          accountId: entityId,
           expiryDate: { lte: new Date(Date.now() + 45 * 86400000) },
         },
         include: { property: true },

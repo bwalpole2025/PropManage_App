@@ -11,7 +11,7 @@ export interface SessionUser {
   id: string;
   name?: string | null;
   email?: string | null;
-  kind?: string | null;
+  role?: string | null;
 }
 
 export interface MembershipContext {
@@ -40,7 +40,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     id: session.user.id,
     name: session.user.name,
     email: session.user.email,
-    kind: session.user.kind,
+    role: session.user.role,
   };
 }
 
@@ -62,7 +62,7 @@ export async function getMemberships(
   });
   return rows.map((m) => ({
     membershipId: m.id,
-    entityId: m.landlordEntityId,
+    entityId: m.accountId,
     entityName: m.entity.displayName,
     entityType: m.entity.type,
     role: m.role,
@@ -109,7 +109,7 @@ export async function requireEntityAccess(
   const user = await requireUser();
   const membership = await prisma.membership.findUnique({
     where: {
-      userId_landlordEntityId: { userId: user.id, landlordEntityId: entityId },
+      userId_accountId: { userId: user.id, accountId: entityId },
     },
   });
   if (!membership || membership.status !== MembershipStatus.ACTIVE) {

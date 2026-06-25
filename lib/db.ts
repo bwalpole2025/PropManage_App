@@ -3,18 +3,20 @@ import { PrismaClient } from "@prisma/client";
 // Models that carry `archivedAt` and should default-exclude soft-deleted rows.
 const SOFT_DELETE_MODELS = new Set(["Property", "Tenancy"]);
 
-// Models that are *directly* scoped by `landlordEntityId` (the account_id).
+// Models that are *directly* scoped by `accountId` (the account_id).
 // Nested-scoped models (e.g. Tenancy via Property, RentScheduleEntry via
 // Tenancy) are intentionally omitted — their scope is enforced via the parent.
 const DIRECTLY_SCOPED_MODELS = new Set([
   "Property",
+  "Portfolio",
+  "Company",
+  "BeneficialOwner",
   "Transaction",
   "ComplianceDocument",
   "ImportantDate",
   "FileObject",
   "BankConnection",
   "TaxYearEstimate",
-  "Owner",
   "AuditLog",
 ]);
 
@@ -61,7 +63,7 @@ function buildClient() {
 
           // 2. Tenant-scope diagnostic (defence-in-depth; the real authority is
           //    requireEntityAccess in lib/auth/active-org.ts). Warns in dev when a
-          //    bulk read on a directly-scoped model omits landlordEntityId and any
+          //    bulk read on a directly-scoped model omits accountId and any
           //    id/boolean-composition that might carry it. Escalate to throw with
           //    STRICT_TENANT_SCOPE=1.
           if (
@@ -71,12 +73,12 @@ function buildClient() {
           ) {
             const where = (a.where ?? {}) as Record<string, unknown>;
             const looksScoped =
-              "landlordEntityId" in where ||
+              "accountId" in where ||
               "id" in where ||
               "AND" in where ||
               "OR" in where;
             if (!looksScoped) {
-              const msg = `[tenant-scope] ${model}.${operation} without landlordEntityId in where — verify the call is account-scoped.`;
+              const msg = `[tenant-scope] ${model}.${operation} without accountId in where — verify the call is account-scoped.`;
               if (process.env.STRICT_TENANT_SCOPE === "1") throw new Error(msg);
               if (process.env.NODE_ENV === "development") console.warn(msg);
             }

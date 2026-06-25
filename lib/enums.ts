@@ -2,13 +2,52 @@
 // strings constrained here. Each export pairs the allowed values with a
 // human-readable label map for the UI.
 
-export const UserKind = {
-  LANDLORD: "LANDLORD",
-  ACCOUNTANT: "ACCOUNTANT",
-  ASSISTANT: "ASSISTANT",
-  ADMIN: "ADMIN",
+// Spec User.role — a global default/classification, distinct from the per-account
+// Membership.role (which remains the RBAC authority). Lowercase per the spec.
+export const UserRole = {
+  OWNER: "owner",
+  ASSISTANT: "assistant",
+  ACCOUNTANT: "accountant",
 } as const;
-export type UserKind = (typeof UserKind)[keyof typeof UserKind];
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+export const UserRoleLabel: Record<UserRole, string> = {
+  owner: "Owner",
+  assistant: "Assistant",
+  accountant: "Accountant",
+};
+
+// Portfolio type (lowercase per spec).
+export const PortfolioType = {
+  PERSONAL: "personal",
+  BUSINESS: "business",
+} as const;
+export type PortfolioType = (typeof PortfolioType)[keyof typeof PortfolioType];
+export const PortfolioTypeLabel: Record<PortfolioType, string> = {
+  personal: "Personal",
+  business: "Business",
+};
+
+// Beneficial owner type (lowercase per spec).
+export const BeneficialOwnerType = {
+  INDIVIDUAL: "individual",
+  COMPANY: "company",
+} as const;
+export type BeneficialOwnerType =
+  (typeof BeneficialOwnerType)[keyof typeof BeneficialOwnerType];
+export const BeneficialOwnerTypeLabel: Record<BeneficialOwnerType, string> = {
+  individual: "Individual",
+  company: "Company",
+};
+
+// Account subscription state.
+export const SubscriptionStatus = {
+  TRIALING: "trialing",
+  ACTIVE: "active",
+  PAST_DUE: "past_due",
+  CANCELED: "canceled",
+} as const;
+export type SubscriptionStatus =
+  (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus];
 
 export const LandlordType = {
   INDIVIDUAL: "INDIVIDUAL",

@@ -4,17 +4,17 @@ import { daysUntil } from "@/lib/format";
 export async function getFilesAndDates(entityId: string) {
   const [compliance, importantDates, files] = await Promise.all([
     prisma.complianceDocument.findMany({
-      where: { landlordEntityId: entityId },
+      where: { accountId: entityId },
       include: { property: { select: { addressLine1: true } } },
       orderBy: { expiryDate: "asc" },
     }),
     prisma.importantDate.findMany({
-      where: { landlordEntityId: entityId },
+      where: { accountId: entityId },
       include: { property: { select: { addressLine1: true } } },
       orderBy: { date: "asc" },
     }),
     prisma.fileObject.findMany({
-      where: { landlordEntityId: entityId },
+      where: { accountId: entityId },
       include: { property: { select: { addressLine1: true } } },
       orderBy: { createdAt: "desc" },
     }),

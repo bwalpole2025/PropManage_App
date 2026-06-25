@@ -18,7 +18,7 @@ export async function listProperties(
   entityId: string,
 ): Promise<PropertyListItem[]> {
   const properties = await prisma.property.findMany({
-    where: { landlordEntityId: entityId, archivedAt: null },
+    where: { accountId: entityId, archivedAt: null },
     include: {
       tenancies: {
         include: {
@@ -63,7 +63,7 @@ export async function listProperties(
 /** Full property detail, scoped to the entity (returns null if not found). */
 export async function getProperty(entityId: string, propertyId: string) {
   const property = await prisma.property.findFirst({
-    where: { id: propertyId, landlordEntityId: entityId },
+    where: { id: propertyId, accountId: entityId },
     include: {
       tenancies: {
         include: { tenants: true, rentSchedule: { orderBy: { dueDate: "desc" }, take: 6 } },
@@ -71,7 +71,7 @@ export async function getProperty(entityId: string, propertyId: string) {
       },
       transactions: { orderBy: { date: "desc" }, take: 10 },
       complianceDocs: { orderBy: { expiryDate: "asc" } },
-      ownershipShares: { include: { owner: true } },
+      ownerships: { include: { beneficialOwner: true } },
     },
   });
   if (!property) return null;
@@ -90,10 +90,10 @@ export async function getProperty(entityId: string, propertyId: string) {
   };
 }
 
-/** Owners belonging to an entity (for ownership-split selection). */
+/** Beneficial owners belonging to an entity (for ownership-split selection). */
 export async function listOwners(entityId: string) {
-  return prisma.owner.findMany({
-    where: { landlordEntityId: entityId },
+  return prisma.beneficialOwner.findMany({
+    where: { accountId: entityId },
     orderBy: { legalName: "asc" },
   });
 }
