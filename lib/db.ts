@@ -96,6 +96,12 @@ function buildClient() {
 
 type ExtendedPrisma = ReturnType<typeof buildClient>;
 
+/** The client handed to an interactive `prisma.$transaction(async (tx) => …)`. */
+export type PrismaTx = Omit<
+  ExtendedPrisma,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
+
 const globalForPrisma = globalThis as unknown as {
   prisma: ExtendedPrisma | undefined;
 };

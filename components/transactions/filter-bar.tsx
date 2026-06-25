@@ -3,12 +3,13 @@
 import { useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Input, Select } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { TxnSource } from "@/lib/enums";
 import {
-  EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
-  Sa105CategoryLabel,
-} from "@/lib/sa105";
+  ALL_EXPENSE_CATEGORIES,
+  ALL_INCOME_CATEGORIES,
+  allCategoryLabel,
+} from "@/lib/categories";
 
 interface Tenancy {
   id: string;
@@ -123,16 +124,16 @@ export function FilterBar({
       >
         <option value="">All categories</option>
         <optgroup label="Income">
-          {INCOME_CATEGORIES.map((c) => (
+          {ALL_INCOME_CATEGORIES.map((c) => (
             <option key={c} value={c}>
-              {Sa105CategoryLabel[c]}
+              {allCategoryLabel[c]}
             </option>
           ))}
         </optgroup>
         <optgroup label="Expenses">
-          {EXPENSE_CATEGORIES.map((c) => (
+          {ALL_EXPENSE_CATEGORIES.map((c) => (
             <option key={c} value={c}>
-              {Sa105CategoryLabel[c]}
+              {allCategoryLabel[c]}
             </option>
           ))}
         </optgroup>
@@ -160,6 +161,15 @@ export function FilterBar({
           onChange={(e) => updateAmount("max", e.target.value)}
         />
       </div>
+
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Switch
+          checked={params.get("showExcluded") === "1"}
+          onCheckedChange={(v) => update("showExcluded", v ? "1" : "")}
+          aria-label="Show deactivated transactions"
+        />
+        Show deactivated
+      </label>
     </div>
   );
 }

@@ -11,7 +11,7 @@ import {
   TxnStatus,
 } from "@/lib/enums";
 import { poundsToPence } from "@/lib/format";
-import { Sa105CategoryDirection, isSa105Category } from "@/lib/sa105";
+import { allCategoryDirection, isKnownCategory } from "@/lib/categories";
 import { parseCsv } from "@/lib/csv";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
@@ -219,9 +219,9 @@ export async function importTransactionsAction(
       continue;
     }
     const rawCategory = iCategory >= 0 ? row[iCategory]?.trim() : "";
-    const category = isSa105Category(rawCategory) ? rawCategory : null;
+    const category = isKnownCategory(rawCategory) ? rawCategory : null;
     const direction = category
-      ? Sa105CategoryDirection[category]
+      ? allCategoryDirection[category]
       : rawAmount.startsWith("-")
         ? TxnDirection.EXPENSE
         : TxnDirection.INCOME;

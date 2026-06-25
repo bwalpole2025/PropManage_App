@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { TxnDirection, TxnStatus } from "@/lib/enums";
 import { poundsToPence } from "@/lib/format";
+import { getDefaultPortfolio } from "./shared";
 import type { Prisma } from "@prisma/client";
 
 export interface TransactionFilters {
@@ -14,6 +15,8 @@ export interface TransactionFilters {
   minPence?: number;
   maxPence?: number;
   uncategorisedOnly?: boolean;
+  /** Include deactivated (EXCLUDED) transactions; hidden by default. */
+  showExcluded?: boolean;
 }
 
 /** Parse URL searchParams into TransactionFilters (shared by the page + export route). */
@@ -31,6 +34,7 @@ export function parseTransactionFilters(
     minPence: sp.min ? poundsToPence(sp.min) : undefined,
     maxPence: sp.max ? poundsToPence(sp.max) : undefined,
     uncategorisedOnly: sp.uncategorised === "1",
+    showExcluded: sp.showExcluded === "1",
   };
 }
 
@@ -42,7 +46,9 @@ export async function listTransactions(
   if (filters.propertyId) where.propertyId = filters.propertyId;
   if (filters.tenancyId) where.tenancyId = filters.tenancyId;
   if (filters.direction) where.direction = filters.direction;
+  // Hide deactivated (EXCLUDED) by default; an explicit status filter overrides.
   if (filters.status) where.status = filters.status;
+  else if (!filters.showExcluded) where.status = { not: TxnStatus.EXCLUDED };
   if (filters.source) where.source = filters.source;
   if (filters.bankAccountId)
     where.bankTxn = { bankAccountId: filters.bankAccountId };
@@ -55,12 +61,24 @@ export async function listTransactions(
     };
   }
 
-  const [transactions, properties, tenancies, bankAccounts, totalCount] =
-    await Promise.all([
+  const [
+    transactions,
+    properties,
+    tenancies,
+    bankAccounts,
+    totalCount,
+    defaultPortfolio,
+  ] = await Promise.all([
       prisma.transaction.findMany({
         where,
         include: {
-          property: { select: { id: true, addressLine1: true } },
+          property: {
+            select: {
+              id: true,
+              addressLine1: true,
+              portfolio: { select: { name: true } },
+            },
+          },
           tenancy: {
             select: {
               id: true,
@@ -84,6 +102,7 @@ export async function listTransactions(
         where: { property: { accountId: entityId }, status: "ACTIVE" },
         select: {
           id: true,
+          propertyId: true,
           property: { select: { addressLine1: true } },
           tenants: {
             where: { isLeadTenant: true },
@@ -98,6 +117,7 @@ export async function listTransactions(
         select: { id: true, name: true, accountNumberMasked: true },
       }),
       prisma.transaction.count({ where: { accountId: entityId } }),
+      getDefaultPortfolio(entityId),
     ]);
 
   const incomePence = transactions
@@ -114,6 +134,7 @@ export async function listTransactions(
     tenancies,
     bankAccounts,
     totalCount,
+    defaultPortfolioName: defaultPortfolio.name,
     totals: { incomePence, expensePence, uncategorised },
   };
 }

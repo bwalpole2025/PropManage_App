@@ -11,10 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
-  Sa105CategoryLabel,
-} from "@/lib/sa105";
+  ALL_EXPENSE_CATEGORIES,
+  ALL_INCOME_CATEGORIES,
+  allCategoryLabel,
+} from "@/lib/categories";
 
 export default async function NewTransactionPage() {
   const ctx = await getActiveContext();
@@ -52,16 +52,16 @@ export default async function NewTransactionPage() {
                   Choose a category…
                 </option>
                 <optgroup label="Income">
-                  {INCOME_CATEGORIES.map((c) => (
+                  {ALL_INCOME_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
-                      {Sa105CategoryLabel[c]}
+                      {allCategoryLabel[c]}
                     </option>
                   ))}
                 </optgroup>
                 <optgroup label="Expenses">
-                  {EXPENSE_CATEGORIES.map((c) => (
+                  {ALL_EXPENSE_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
-                      {Sa105CategoryLabel[c]}
+                      {allCategoryLabel[c]}
                     </option>
                   ))}
                 </optgroup>

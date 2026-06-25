@@ -8,7 +8,7 @@ import { CurrencyValue } from "@/components/shared/currency-value";
 import { ReminderBadge } from "@/components/shared/reminder-badge";
 import { formatDate, formatPenceCompact } from "@/lib/format";
 import { DocumentCategoryLabel } from "@/lib/enums";
-import { Sa105CategoryLabel, isSa105Category } from "@/lib/sa105";
+import { categoryLabel, isKnownCategory } from "@/lib/categories";
 
 export default async function PropertyOverviewPage({
   params,
@@ -64,8 +64,8 @@ export default async function PropertyOverviewPage({
                       <p className="truncate text-sm font-medium">{t.description}</p>
                       <p className="text-xs text-muted-foreground">
                         {formatDate(t.date)}
-                        {isSa105Category(t.category)
-                          ? ` · ${Sa105CategoryLabel[t.category]}`
+                        {isKnownCategory(t.category)
+                          ? ` · ${categoryLabel(t.category)}`
                           : ""}
                       </p>
                     </div>

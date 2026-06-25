@@ -16,22 +16,27 @@ import {
 } from "@/components/ui/dialog";
 import { Input, Label, Select } from "@/components/ui/input";
 import {
-  EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
-  Sa105CategoryLabel,
-} from "@/lib/sa105";
+  ALL_EXPENSE_CATEGORIES,
+  ALL_INCOME_CATEGORIES,
+  allCategoryLabel,
+  subcategoriesFor,
+} from "@/lib/categories";
 
 export function AddTransactionDialog({
   properties,
+  tenancies,
 }: {
   properties: { id: string; addressLine1: string }[];
+  tenancies: { id: string; label: string }[];
 }) {
   const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState("");
   const router = useRouter();
   const [state, action, pending] = useActionState<AddTransactionState, FormData>(
     addTransactionAction,
     {},
   );
+  const subs = subcategoriesFor(category);
 
   // On a successful save, close the dialog and refresh so the row appears.
   useEffect(() => {
@@ -47,7 +52,7 @@ export function AddTransactionDialog({
         <Plus className="h-4 w-4" /> Add transaction
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogClose onClose={() => setOpen(false)} />
           <DialogHeader>
             <DialogTitle>Add a transaction</DialogTitle>
@@ -56,27 +61,51 @@ export function AddTransactionDialog({
             </DialogDescription>
           </DialogHeader>
           <form action={action} className="space-y-4">
-            <div>
-              <Label htmlFor="category">Category</Label>
-              <Select id="category" name="category" required defaultValue="">
-                <option value="" disabled>
-                  Choose a category…
-                </option>
-                <optgroup label="Income">
-                  {INCOME_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {Sa105CategoryLabel[c]}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="category">Category</Label>
+                <Select
+                  id="category"
+                  name="category"
+                  required
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  <option value="" disabled>
+                    Choose a category…
+                  </option>
+                  <optgroup label="Income">
+                    {ALL_INCOME_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {allCategoryLabel[c]}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Expenses">
+                    {ALL_EXPENSE_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {allCategoryLabel[c]}
+                      </option>
+                    ))}
+                  </optgroup>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="subcategory">Subcategory (optional)</Label>
+                <Select
+                  id="subcategory"
+                  name="subcategory"
+                  defaultValue=""
+                  disabled={subs.length === 0}
+                >
+                  <option value="">{subs.length ? "None" : "—"}</option>
+                  {subs.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
                     </option>
                   ))}
-                </optgroup>
-                <optgroup label="Expenses">
-                  {EXPENSE_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {Sa105CategoryLabel[c]}
-                    </option>
-                  ))}
-                </optgroup>
-              </Select>
+                </Select>
+              </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -105,19 +134,32 @@ export function AddTransactionDialog({
                 </Select>
               </div>
               <div>
+                <Label htmlFor="tenancyId">Tenancy (optional)</Label>
+                <Select id="tenancyId" name="tenancyId" defaultValue="">
+                  <option value="">No specific tenancy</option>
+                  {tenancies.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
                 <Label htmlFor="merchant">Merchant / payee (optional)</Label>
                 <Input id="merchant" name="merchant" />
+              </div>
+              <div>
+                <Label htmlFor="notes">Notes (optional)</Label>
+                <Input id="notes" name="notes" />
               </div>
             </div>
             {state.error ? (
               <p className="text-sm text-danger">{state.error}</p>
             ) : null}
             <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setOpen(false)}
-              >
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={pending}>

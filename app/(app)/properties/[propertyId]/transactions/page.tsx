@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatDate } from "@/lib/format";
-import { Sa105CategoryLabel, isSa105Category } from "@/lib/sa105";
+import { categoryLabel, isKnownCategory } from "@/lib/categories";
 
 export default async function PropertyTransactionsPage({
   params,
@@ -71,10 +71,8 @@ export default async function PropertyTransactionsPage({
                     </TD>
                     <TD className="font-medium">{t.description}</TD>
                     <TD>
-                      {isSa105Category(t.category) ? (
-                        <Badge tone="neutral">
-                          {Sa105CategoryLabel[t.category]}
-                        </Badge>
+                      {isKnownCategory(t.category) ? (
+                        <Badge tone="neutral">{categoryLabel(t.category)}</Badge>
                       ) : (
                         <Badge tone="warning">Uncategorised</Badge>
                       )}
