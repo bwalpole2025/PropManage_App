@@ -52,6 +52,7 @@ model User {
   uploadedFiles        FileObject[]
   emailVerifyTokens    EmailVerificationToken[]
   passwordResetTokens  PasswordResetToken[]
+  mobileVerifyTokens   MobileVerificationToken[]
 }
 
 // Single-use, hashed token for email verification (sha256(raw) stored).
@@ -76,6 +77,21 @@ model PasswordResetToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Single-use, hashed 6-digit OTP for mobile-number verification. codeHash is NOT
+// unique (low-entropy code, namespaced per user) — looked up by userId.
+model MobileVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

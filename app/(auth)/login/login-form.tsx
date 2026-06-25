@@ -15,6 +15,9 @@ function SubmitButton() {
   );
 }
 
+// Pre-fill demo credentials in development only — never in production.
+const demo = process.env.NODE_ENV !== "production";
+
 export function LoginForm() {
   const [state, formAction] = useActionState<AuthFormState, FormData>(
     loginAction,
@@ -30,7 +33,7 @@ export function LoginForm() {
           name="email"
           type="email"
           autoComplete="email"
-          defaultValue="landlord@example.com"
+          defaultValue={demo ? "landlord@example.com" : undefined}
           required
         />
       </div>
@@ -41,7 +44,7 @@ export function LoginForm() {
           name="password"
           type="password"
           autoComplete="current-password"
-          defaultValue="Password123!"
+          defaultValue={demo ? "Password123!" : undefined}
           required
         />
       </div>

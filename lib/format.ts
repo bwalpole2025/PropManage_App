@@ -109,3 +109,16 @@ export function recentTaxYears(count = 4, now: Date = new Date()): string[] {
     return `${y}-${String((y + 1) % 100).padStart(2, "0")}`;
   });
 }
+
+/**
+ * Tax-year labels from a start year down to an end year, newest first.
+ * e.g. taxYearOptions(2026, 2014) -> ["2026-27", "2025-26", …, "2014-15"].
+ * Used for the "first tax year to reconcile from" selector.
+ */
+export function taxYearOptions(fromStartYear = 2026, toStartYear = 2014): string[] {
+  const out: string[] = [];
+  for (let y = fromStartYear; y >= toStartYear; y--) {
+    out.push(`${y}-${String((y + 1) % 100).padStart(2, "0")}`);
+  }
+  return out;
+}

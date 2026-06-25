@@ -40,12 +40,14 @@ export default async function LoginPage({
         </Link>
       </p>
 
-      <div className="mt-6 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-        <p className="font-medium text-foreground">Demo logins</p>
-        <p className="mt-1">Landlord — landlord@example.com</p>
-        <p>Accountant — accountant@example.com</p>
-        <p>Password — Password123!</p>
-      </div>
+      {process.env.NODE_ENV !== "production" ? (
+        <div className="mt-6 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground">Demo logins</p>
+          <p className="mt-1">Landlord — landlord@example.com</p>
+          <p>Accountant — accountant@example.com</p>
+          <p>Password — Password123!</p>
+        </div>
+      ) : null}
     </div>
   );
 }

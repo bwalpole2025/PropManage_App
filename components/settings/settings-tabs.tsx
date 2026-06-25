@@ -9,11 +9,13 @@ export function SettingsTabs() {
   const tabs = [
     { href: "/settings", label: "Profile" },
     { href: "/settings/organization", label: "Organisation" },
+    { href: "/settings/subscription", label: "Subscription" },
+    { href: "/settings/notifications", label: "Notifications" },
     { href: "/settings/team", label: "Team & access" },
     { href: "/settings/security", label: "Security" },
   ];
   return (
-    <div className="flex gap-1 border-b border-border">
+    <div className="flex flex-wrap gap-1 border-b border-border">
       {tabs.map((t) => {
         const active = pathname === t.href;
         return (

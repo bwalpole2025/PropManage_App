@@ -1,8 +1,9 @@
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, randomInt, createHash } from "node:crypto";
 import { prisma } from "@/lib/db";
 
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const RESET_TTL_MS = 60 * 60 * 1000; // 1h
+const MOBILE_OTP_TTL_MS = 10 * 60 * 1000; // 10m
 
 /** A URL-safe random token; only the sha256 hash is persisted. */
 export function generateToken(): { raw: string; hash: string } {
@@ -56,4 +57,38 @@ export async function consumePasswordResetToken(
     data: { usedAt: new Date() },
   });
   return { userId: row.userId };
+}
+
+/** Create a single-use 6-digit mobile OTP; returns the raw code to send by SMS. */
+export async function createMobileOtp(userId: string): Promise<string> {
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  // Invalidate any outstanding codes — one active OTP per user.
+  await prisma.mobileVerificationToken.updateMany({
+    where: { userId, usedAt: null },
+    data: { usedAt: new Date() },
+  });
+  await prisma.mobileVerificationToken.create({
+    data: {
+      userId,
+      codeHash: hashToken(code),
+      expiresAt: new Date(Date.now() + MOBILE_OTP_TTL_MS),
+    },
+  });
+  return code;
+}
+
+/** Verify + consume a mobile OTP. Returns true on success. */
+export async function consumeMobileOtp(
+  userId: string,
+  code: string,
+): Promise<boolean> {
+  const row = await prisma.mobileVerificationToken.findFirst({
+    where: { userId, codeHash: hashToken(code), usedAt: null },
+  });
+  if (!row || row.expiresAt < new Date()) return false;
+  await prisma.mobileVerificationToken.update({
+    where: { id: row.id },
+    data: { usedAt: new Date() },
+  });
+  return true;
 }

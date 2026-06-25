@@ -142,6 +142,19 @@ export async function registerAction(
     },
   });
 
+  // Send the welcome/verification email (new users land unverified; they can
+  // resend it from Settings). Best-effort — don't block sign-up on email errors.
+  try {
+    const raw = await createEmailVerifyToken(user.id);
+    await emailSender.sendVerificationEmail({
+      to: user.email,
+      name: fullName(user),
+      verifyUrl: `${appBaseUrl()}/verify-email/${raw}`,
+    });
+  } catch {
+    /* ignore email failures during sign-up */
+  }
+
   try {
     await signIn("credentials", { email, password, redirectTo: "/dashboard" });
   } catch (error) {

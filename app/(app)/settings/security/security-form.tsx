@@ -3,12 +3,17 @@
 import Image from "next/image";
 import { useActionState, useState, useTransition } from "react";
 import { CheckCircle2, ShieldCheck, MailCheck } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import {
   beginTotpEnrollmentAction,
   confirmTotpEnrollmentAction,
   disableTotpAction,
   type SecurityFormState,
 } from "@/actions/security";
+import {
+  changePasswordAction,
+  type ProfileFormState,
+} from "@/actions/profile";
 import { requestEmailVerificationAction } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -24,15 +29,73 @@ import {
 export function SecurityForm({
   emailVerified,
   twoFactorEnabled,
+  hasPassword,
 }: {
   emailVerified: boolean;
   twoFactorEnabled: boolean;
+  hasPassword: boolean;
 }) {
   return (
     <div className="space-y-6">
       <EmailVerificationCard verified={emailVerified} />
+      {hasPassword ? <ChangePasswordCard /> : null}
       <TotpCard enabled={twoFactorEnabled} />
     </div>
+  );
+}
+
+function ChangePasswordCard() {
+  const [state, action, pending] = useActionState<ProfileFormState, FormData>(
+    changePasswordAction,
+    {},
+  );
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <KeyRound className="h-5 w-5 text-primary" /> Change password
+        </CardTitle>
+        <CardDescription>
+          Use at least 8 characters. You'll stay signed in on this device.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={action} className="max-w-sm space-y-4">
+          <div>
+            <Label htmlFor="currentPassword">Current password</Label>
+            <Input
+              id="currentPassword"
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="newPassword">New password</Label>
+            <Input
+              id="newPassword"
+              name="newPassword"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <Button type="submit" disabled={pending}>
+              {pending ? "Updating…" : "Update password"}
+            </Button>
+            {state.success ? (
+              <p className="text-sm text-success">{state.success}</p>
+            ) : null}
+            {state.error ? (
+              <p className="text-sm text-danger">{state.error}</p>
+            ) : null}
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 

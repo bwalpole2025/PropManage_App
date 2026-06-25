@@ -1,10 +1,8 @@
 import { getActiveContext } from "@/lib/auth/active-org";
+import { can, Capability } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input, Label } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { LandlordTypeLabel } from "@/lib/enums";
+import { taxYearOptions } from "@/lib/format";
+import { OrganizationForm } from "../organization-form";
 
 export default async function OrganizationSettingsPage() {
   const ctx = await getActiveContext();
@@ -12,45 +10,23 @@ export default async function OrganizationSettingsPage() {
     where: { id: ctx.entityId },
   });
 
+  const timeZones = Intl.supportedValuesOf("timeZone");
+  const taxYears = taxYearOptions(2026, 2014);
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Organisation</CardTitle>
-        <CardDescription>
-          Details for {entity.displayName}. Used on your tax records and MTD
-          submissions.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <Label htmlFor="displayName">Name</Label>
-          <Input id="displayName" defaultValue={entity.displayName} disabled />
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge tone="primary">
-            {LandlordTypeLabel[entity.type as keyof typeof LandlordTypeLabel] ??
-              entity.type}
-          </Badge>
-          {entity.mtdEnrolled ? <Badge tone="success">MTD enrolled</Badge> : null}
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="utr">Self Assessment UTR</Label>
-            <Input id="utr" defaultValue={entity.utr ?? ""} disabled />
-          </div>
-          {entity.companyNumber ? (
-            <div>
-              <Label htmlFor="companyNumber">Company number</Label>
-              <Input
-                id="companyNumber"
-                defaultValue={entity.companyNumber}
-                disabled
-              />
-            </div>
-          ) : null}
-        </div>
-        <Button disabled>Save changes (soon)</Button>
-      </CardContent>
-    </Card>
+    <OrganizationForm
+      org={{
+        displayName: entity.displayName,
+        type: entity.type,
+        utr: entity.utr,
+        companyNumber: entity.companyNumber,
+        mtdEnrolled: entity.mtdEnrolled,
+        timeZone: entity.timeZone,
+        firstTaxYear: entity.firstTaxYear,
+      }}
+      timeZones={timeZones}
+      taxYears={taxYears}
+      canEdit={can(ctx.role, Capability.MANAGE_BILLING)}
+    />
   );
 }
