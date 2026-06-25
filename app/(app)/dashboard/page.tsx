@@ -1,28 +1,25 @@
 import Link from "next/link";
-import { AlertTriangle, Calculator, ShieldCheck } from "lucide-react";
+import { Plus } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
-import { getDashboardData } from "@/services/dashboard";
+import { getOverviewData } from "@/services/overview";
 import { PageHeader } from "@/components/shared/page-header";
-import { DashboardKpis } from "./dashboard-kpis";
 import { OnboardingChecklist } from "@/components/shared/onboarding-checklist";
-import { DisclaimerBanner } from "@/components/shared/disclaimer-banner";
-import { ReminderBadge } from "@/components/shared/reminder-badge";
-import { CurrencyValue } from "@/components/shared/currency-value";
-import { EmptyState } from "@/components/shared/empty-state";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { formatPenceCompact, formatDate } from "@/lib/format";
-import { ComplianceTypeLabel } from "@/lib/enums";
+import { OverviewHelpMenu } from "@/components/dashboard/help-menu";
+import { HelpBanner } from "@/components/dashboard/help-banner";
+import { ProfitLossWidget } from "@/components/dashboard/widgets/profit-loss-widget";
+import { AssetAnalysisWidget } from "@/components/dashboard/widgets/asset-analysis-widget";
+import { OccupancyWidget } from "@/components/dashboard/widgets/occupancy-widget";
+import { ArrearsWidget } from "@/components/dashboard/widgets/arrears-widget";
+import { UpcomingPaymentsWidget } from "@/components/dashboard/widgets/upcoming-payments-widget";
+import { RentCollectionWidget } from "@/components/dashboard/widgets/rent-collection-widget";
+import { MarketRiskWidget } from "@/components/dashboard/widgets/market-risk-widget";
+import { RentalYieldsWidget } from "@/components/dashboard/widgets/rental-yields-widget";
+import { TaxEstimateWidget } from "@/components/dashboard/widgets/tax-estimate-widget";
+import { ComplianceWidget } from "@/components/dashboard/widgets/compliance-widget";
 
 export default async function DashboardPage() {
   const ctx = await getActiveContext();
-  const data = await getDashboardData(ctx.entityId, ctx.user.id);
+  const data = await getOverviewData(ctx.entityId, ctx.user.id);
 
   const steps = [
     {
@@ -54,152 +51,46 @@ export default async function DashboardPage() {
     },
   ];
 
+  const locked = !data.pnl.hasTransactions;
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Dashboard"
+        title="Overview"
         description={`Overview for ${ctx.entityName} · tax year ${data.taxYear}`}
+        actions={
+          <>
+            <OverviewHelpMenu />
+            <Link
+              href="/properties/new"
+              aria-label="Add property"
+              title="Add property"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+            </Link>
+          </>
+        }
       />
 
-      {/* KPI tiles — client-rendered via tRPC + TanStack Query */}
-      <DashboardKpis />
+      <HelpBanner />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Onboarding + alerts */}
-        <div className="space-y-6 lg:col-span-2">
-          <OnboardingChecklist
-            steps={steps}
-            emailUnverified={data.onboarding.emailUnverified}
-          />
+      <OnboardingChecklist
+        steps={steps}
+        emailUnverified={data.onboarding.emailUnverified}
+      />
 
-          {/* Missing-rent / arrears */}
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle>Missing rent &amp; arrears</CardTitle>
-                <CardDescription>
-                  Expected rent that hasn&apos;t fully arrived.
-                </CardDescription>
-              </div>
-              <AlertTriangle className="h-5 w-5 text-warning-foreground" />
-            </CardHeader>
-            <CardContent>
-              {data.arrears.length === 0 ? (
-                <EmptyState
-                  icon={<ShieldCheck className="h-5 w-5" />}
-                  title="No arrears"
-                  description="Every active tenancy is up to date."
-                />
-              ) : (
-                <ul className="divide-y divide-border">
-                  {data.arrears.map((a) => (
-                    <li
-                      key={a.tenancyId + a.dueDate.toISOString()}
-                      className="flex items-center justify-between py-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {a.propertyLabel}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {a.tenantName} · due {formatDate(a.dueDate)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Badge
-                          tone={a.status === "OVERDUE" ? "danger" : "warning"}
-                        >
-                          {a.status}
-                        </Badge>
-                        <CurrencyValue
-                          pence={a.shortfallPence}
-                          tone="expense"
-                          className="text-sm font-semibold"
-                        />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right rail: tax snapshot + compliance */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle>Tax estimate</CardTitle>
-                <CardDescription>SA105 basis · {data.taxYear}</CardDescription>
-              </div>
-              <Calculator className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Estimated tax
-                </p>
-                <p className="text-2xl font-semibold tabular-nums text-primary">
-                  {formatPenceCompact(data.tax.estimatedTaxPence)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  on taxable profit of{" "}
-                  {formatPenceCompact(data.tax.taxableProfitPence)}
-                </p>
-              </div>
-              <DisclaimerBanner />
-              <Link
-                href="/tax"
-                className="block text-sm font-medium text-primary hover:underline"
-              >
-                View full tax breakdown →
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle>Compliance reminders</CardTitle>
-                <CardDescription>Certificates due soon</CardDescription>
-              </div>
-              <ShieldCheck className="h-5 w-5 text-accent" />
-            </CardHeader>
-            <CardContent>
-              {data.compliance.length === 0 ? (
-                <EmptyState
-                  title="Nothing due"
-                  description="No certificates expiring in the next 45 days."
-                />
-              ) : (
-                <ul className="space-y-3">
-                  {data.compliance.map((c) => (
-                    <li key={c.id} className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {ComplianceTypeLabel[
-                            c.type as keyof typeof ComplianceTypeLabel
-                          ] ?? c.type}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {c.propertyLabel ?? "Portfolio-wide"}
-                        </p>
-                      </div>
-                      <ReminderBadge date={c.expiryDate} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <Link
-                href="/files"
-                className="mt-4 block text-sm font-medium text-primary hover:underline"
-              >
-                All files &amp; dates →
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ProfitLossWidget pnl={data.pnl} className="sm:col-span-2" />
+        <OccupancyWidget occupancy={data.occupancy} />
+        <AssetAnalysisWidget asset={data.asset} />
+        <RentCollectionWidget data={data.rentCollection} locked={locked} />
+        <ArrearsWidget arrears={data.arrears} className="sm:col-span-2" />
+        <UpcomingPaymentsWidget upcoming={data.upcoming} />
+        <RentalYieldsWidget yields={data.yields} />
+        <MarketRiskWidget risk={data.marketRisk} />
+        <TaxEstimateWidget tax={data.tax} taxYear={data.taxYear} />
+        <ComplianceWidget compliance={data.compliance} />
       </div>
     </div>
   );

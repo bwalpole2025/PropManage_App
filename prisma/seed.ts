@@ -264,6 +264,7 @@ async function main() {
       purchasePricePence: 21_000_000,
       currentValuePence: 23_500_000,
       furnished: true,
+      isFHL: true, // furnished holiday let — shows in the Occupancy widget's FHL count
       ownerships: {
         create: [
           { beneficialOwnerId: ownerJordan.id, ownershipPercentageBp: 10000 },
