@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/db";
-import { RentStatus, TenancyStatus } from "@/lib/enums";
+import { NotificationKind, RentStatus, TenancyStatus } from "@/lib/enums";
+import { formatPence } from "@/lib/format";
+import { parseNotificationPrefs } from "@/lib/notifications";
+import { createForAccountUsers } from "@/lib/notifications/service";
+import { emailSender } from "@/lib/email";
 import type { JobPayloads } from "../types";
 
 const DAY = 86_400_000;
@@ -7,7 +11,8 @@ const DAY = 86_400_000;
 /**
  * Detect rent arrears: rent-schedule periods past their due date that aren't
  * fully paid become OVERDUE/PARTIAL with an open ArrearsAlert; periods that have
- * since been paid resolve their alert.
+ * since been paid resolve their alert. When an alert OPENS, raise an in-app
+ * "Rent overdue" notification (and a preference-gated email).
  */
 export async function computeArrears(data: JobPayloads["computeArrears"]) {
   const now = new Date();
@@ -21,7 +26,19 @@ export async function computeArrears(data: JobPayloads["computeArrears"]) {
       },
       status: { not: RentStatus.WAIVED },
     },
-    include: { arrearsAlerts: { where: { resolvedAt: null } } },
+    include: {
+      arrearsAlerts: { where: { resolvedAt: null } },
+      tenancy: {
+        select: {
+          property: { select: { accountId: true, addressLine1: true } },
+          tenants: {
+            where: { isLeadTenant: true },
+            take: 1,
+            select: { name: true },
+          },
+        },
+      },
+    },
   });
 
   let opened = 0;
@@ -57,6 +74,7 @@ export async function computeArrears(data: JobPayloads["computeArrears"]) {
           },
         });
         opened++;
+        await notifyArrears(e.tenancy, shortfall, daysOverdue);
       }
     } else if (e.receivedPence >= e.expectedPence && e.arrearsAlerts.length) {
       // Now paid — resolve any open alert.
@@ -77,4 +95,46 @@ export async function computeArrears(data: JobPayloads["computeArrears"]) {
   console.log(
     `[jobs] computeArrears: ${entries.length} periods checked, ${opened} alert(s) opened, ${resolved} resolved`,
   );
+}
+
+async function notifyArrears(
+  tenancy: {
+    property: { accountId: string; addressLine1: string };
+    tenants: { name: string }[];
+  },
+  shortfallPence: number,
+  daysOverdue: number,
+) {
+  const accountId = tenancy.property.accountId;
+  const who = tenancy.tenants[0]?.name ?? "a tenant";
+  const body = `${formatPence(shortfallPence)} overdue by ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} — ${who}, ${tenancy.property.addressLine1}.`;
+
+  await createForAccountUsers({
+    accountId,
+    kind: NotificationKind.RENT_OVERDUE,
+    title: "Rent overdue",
+    body,
+    href: "/transactions",
+  });
+
+  const account = await prisma.account.findUnique({
+    where: { id: accountId },
+    select: {
+      notificationPrefs: true,
+      principal: { select: { email: true, firstName: true } },
+    },
+  });
+  if (
+    account?.principal?.email &&
+    parseNotificationPrefs(account.notificationPrefs).rentAndArrears
+  ) {
+    await emailSender.sendOperationalAlert({
+      to: account.principal.email,
+      name: account.principal.firstName,
+      subject: "Rent overdue — PropManage",
+      heading: "Rent overdue",
+      body,
+      href: "/transactions",
+    });
+  }
 }

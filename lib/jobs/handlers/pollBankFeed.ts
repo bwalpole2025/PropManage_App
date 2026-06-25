@@ -1,54 +1,33 @@
 import { prisma } from "@/lib/db";
 import { BankConnStatus } from "@/lib/enums";
-import { services } from "@/lib/services";
+import { expireStaleConnections, ingestBankConnection } from "@/lib/bank-ingest";
 import type { JobPayloads } from "../types";
 
-const NINETY_DAYS = 90 * 86_400_000;
-
 /**
- * Poll the (mock) bank feed for active connections and upsert raw
- * BankTransaction rows by their provider id — the raw items the Reconcile
- * screen later matches to domain Transactions.
+ * Poll the bank feed: first expire any connections whose consent has lapsed,
+ * then ingest each ACTIVE connection (upserting raw BankTransactions, creating
+ * domain Transactions, and notifying on new incoming payments).
  */
 export async function pollBankFeed(data: JobPayloads["pollBankFeed"]) {
+  const expired = await expireStaleConnections();
+
   const connections = await prisma.bankConnection.findMany({
     where: {
       status: BankConnStatus.ACTIVE,
       ...(data.entityId ? { accountId: data.entityId } : {}),
     },
-    include: { accounts: true },
+    select: { id: true },
   });
 
-  const to = new Date();
-  const from = new Date(to.getTime() - NINETY_DAYS);
   let imported = 0;
-
+  let notified = 0;
   for (const conn of connections) {
-    for (const account of conn.accounts) {
-      const { transactions } = await services.bankFeed.listTransactions({
-        accountId: account.providerAccountId,
-        from: from.toISOString(),
-        to: to.toISOString(),
-      });
-      for (const t of transactions) {
-        await prisma.bankTransaction.upsert({
-          where: { providerTxnId: t.providerTxnId },
-          create: {
-            bankAccountId: account.id,
-            providerTxnId: t.providerTxnId,
-            amountPence: t.amountPence,
-            date: new Date(t.date),
-            description: t.description,
-            rawCategory: t.rawCategory ?? null,
-          },
-          update: {},
-        });
-        imported++;
-      }
-    }
+    const r = await ingestBankConnection(conn.id, { notify: true });
+    imported += r.imported;
+    notified += r.notified;
   }
 
   console.log(
-    `[jobs] pollBankFeed: ${connections.length} connection(s), ${imported} item(s) upserted`,
+    `[jobs] pollBankFeed: ${connections.length} connection(s), ${imported} imported, ${notified} notified, ${expired} expired`,
   );
 }

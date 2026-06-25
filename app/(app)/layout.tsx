@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { SIDEBAR_COOKIE } from "@/components/layout/nav-config";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { NotificationBell } from "@/components/layout/notification-bell";
+import { listForUser, unreadCount } from "@/lib/notifications/service";
 import { TrialBanner } from "@/components/layout/trial-banner";
 import { HelpFab } from "@/components/layout/help-fab";
 import { VerifyEmailBanner } from "@/components/shared/verify-email-banner";
@@ -16,7 +18,7 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const ctx = await getActiveContext();
-  const [user, account, cookieStore] = await Promise.all([
+  const [user, account, cookieStore, notifItems, notifCount] = await Promise.all([
     prisma.user.findUnique({
       where: { id: ctx.user.id },
       select: { emailVerified: true, coachmarkState: true },
@@ -26,9 +28,20 @@ export default async function AppLayout({
       select: { subscriptionStatus: true, trialEndsAt: true },
     }),
     cookies(),
+    listForUser(ctx.entityId, ctx.user.id, { limit: 15 }),
+    unreadCount(ctx.entityId, ctx.user.id),
   ]);
   const unverified = !user?.emailVerified;
   const collapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "1";
+  const bellItems = notifItems.map((n) => ({
+    id: n.id,
+    kind: n.kind,
+    title: n.title,
+    body: n.body,
+    href: n.href,
+    readAt: n.readAt ? n.readAt.toISOString() : null,
+    createdAt: n.createdAt.toISOString(),
+  }));
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -43,8 +56,13 @@ export default async function AppLayout({
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center border-b border-border bg-card px-6">
+        <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
           <Breadcrumbs />
+          <NotificationBell
+            key={ctx.entityId}
+            initialCount={notifCount}
+            initialItems={bellItems}
+          />
         </header>
         <TrialBanner
           subscriptionStatus={account?.subscriptionStatus ?? "active"}

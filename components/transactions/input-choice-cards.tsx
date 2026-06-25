@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ConnectBankFeedButton } from "./connect-bank-feed-button";
-import { ImportTransactionsButton } from "./import-dialog";
+import { ImportWizardButton } from "./import-wizard";
 
 function Bullets({ items }: { items: string[] }) {
   return (
@@ -23,7 +23,17 @@ function Bullets({ items }: { items: string[] }) {
 }
 
 /** Empty-state for an account with no transactions: choose how to get data in. */
-export function InputChoiceCards({ canManage }: { canManage: boolean }) {
+export function InputChoiceCards({
+  canManage,
+  canManageFiles,
+  properties,
+  tenancies,
+}: {
+  canManage: boolean;
+  canManageFiles: boolean;
+  properties: { id: string; addressLine1: string }[];
+  tenancies: { id: string; label: string }[];
+}) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Card>
@@ -69,7 +79,10 @@ export function InputChoiceCards({ canManage }: { canManage: boolean }) {
             ]}
           />
           {canManage ? (
-            <ImportTransactionsButton
+            <ImportWizardButton
+              properties={properties}
+              tenancies={tenancies}
+              canManageFiles={canManageFiles}
               label="Upload spreadsheets"
               variant="secondary"
             />

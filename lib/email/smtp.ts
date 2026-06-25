@@ -1,5 +1,9 @@
 import type { EmailSender, SendResult } from "./types";
-import { passwordResetEmail, verificationEmail } from "./templates";
+import {
+  operationalAlertEmail,
+  passwordResetEmail,
+  verificationEmail,
+} from "./templates";
 
 // Real SMTP sender (EMAIL_DRIVER=smtp). nodemailer is imported lazily so the
 // default mock path never loads it.
@@ -47,6 +51,26 @@ export class SmtpEmailSender implements EmailSender {
     return this.send(
       input.to,
       passwordResetEmail({ name: input.name, resetUrl: input.resetUrl }),
+    );
+  }
+
+  async sendOperationalAlert(input: {
+    to: string;
+    name?: string | null;
+    subject: string;
+    heading: string;
+    body: string;
+    href?: string | null;
+  }): Promise<SendResult> {
+    return this.send(
+      input.to,
+      operationalAlertEmail({
+        name: input.name,
+        subject: input.subject,
+        heading: input.heading,
+        body: input.body,
+        href: input.href,
+      }),
     );
   }
 }

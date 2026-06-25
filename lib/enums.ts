@@ -193,6 +193,18 @@ export const BankConnStatus = {
 export type BankConnStatus =
   (typeof BankConnStatus)[keyof typeof BankConnStatus];
 
+export const NotificationKind = {
+  PAYMENT_RECEIVED: "PAYMENT_RECEIVED",
+  RENT_OVERDUE: "RENT_OVERDUE",
+} as const;
+export type NotificationKind =
+  (typeof NotificationKind)[keyof typeof NotificationKind];
+
+export const NotificationKindLabel: Record<NotificationKind, string> = {
+  PAYMENT_RECEIVED: "Payment received",
+  RENT_OVERDUE: "Rent overdue",
+};
+
 export const ComplianceType = {
   EPC: "EPC",
   GAS_SAFETY: "GAS_SAFETY",

@@ -53,6 +53,7 @@ model User {
   emailVerifyTokens    EmailVerificationToken[]
   passwordResetTokens  PasswordResetToken[]
   mobileVerifyTokens   MobileVerificationToken[]
+  notifications        Notification[]
 }
 
 // Single-use, hashed token for email verification (sha256(raw) stored).
@@ -174,6 +175,7 @@ model Account {
   taxStatements    TaxStatement[]
   mtdConnection    MtdConnection?
   auditLogs        AuditLog[]
+  notifications    Notification[]
 
   @@index([principalUserId])
 }
@@ -588,6 +590,25 @@ model BankTransaction {
   matchedTxn  Transaction?
 
   @@index([bankAccountId, date])
+}
+
+// In-app notification inbox (per account, optionally targeted at a user).
+model Notification {
+  id        String    @id @default(cuid())
+  accountId String
+  userId    String?
+  kind      String // NotificationKind: PAYMENT_RECEIVED | RENT_OVERDUE
+  title     String
+  body      String?
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, userId, readAt])
+  @@index([accountId, createdAt])
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import type { EmailSender, SendResult } from "./types";
 import {
+  operationalAlertEmail,
   passwordResetEmail,
   verificationEmail,
   type RenderedEmail,
@@ -54,6 +55,27 @@ export class MockEmailSender implements EmailSender {
       input.to,
       input.resetUrl,
       passwordResetEmail({ name: input.name, resetUrl: input.resetUrl }),
+    );
+  }
+
+  async sendOperationalAlert(input: {
+    to: string;
+    name?: string | null;
+    subject: string;
+    heading: string;
+    body: string;
+    href?: string | null;
+  }): Promise<SendResult> {
+    return record(
+      input.to,
+      input.href ?? "",
+      operationalAlertEmail({
+        name: input.name,
+        subject: input.subject,
+        heading: input.heading,
+        body: input.body,
+        href: input.href,
+      }),
     );
   }
 }

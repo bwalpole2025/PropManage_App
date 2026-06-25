@@ -52,10 +52,11 @@ export class MockBankFeedService implements BankFeedService {
 
   async createLinkSession(input: { entityId: string; redirectUri: string }) {
     const linkSessionId = `mock-link-${input.entityId}`;
-    // In a real provider this is a hosted URL; here it points at a dev page.
+    // In a real provider this is the provider-hosted consent URL; here it points
+    // at our mock consent page.
     return {
       linkSessionId,
-      linkUrl: `/transactions/reconcile?mockLink=${linkSessionId}`,
+      linkUrl: `/transactions/connect?mockLink=${linkSessionId}`,
     };
   }
 

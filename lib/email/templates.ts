@@ -18,6 +18,25 @@ export function verificationEmail(input: {
   };
 }
 
+export function operationalAlertEmail(input: {
+  name?: string | null;
+  subject: string;
+  heading: string;
+  body: string;
+  href?: string | null;
+}): RenderedEmail {
+  const greeting = input.name ? `Hi ${input.name},` : "Hi,";
+  const link = input.href ? `\n\nView in PropManage: ${input.href}` : "";
+  const linkHtml = input.href
+    ? `<p><a href="${input.href}">View in PropManage</a></p>`
+    : "";
+  return {
+    subject: input.subject,
+    text: `${greeting}\n\n${input.body}${link}`,
+    html: `<p>${greeting}</p><p><strong>${input.heading}</strong></p><p>${input.body}</p>${linkHtml}`,
+  };
+}
+
 export function passwordResetEmail(input: {
   name?: string | null;
   resetUrl: string;

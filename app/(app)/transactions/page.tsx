@@ -1,10 +1,13 @@
 import { getActiveContext } from "@/lib/auth/active-org";
+import { prisma } from "@/lib/db";
+import { BankConnStatus } from "@/lib/enums";
 import {
   listTransactions,
   parseTransactionFilters,
 } from "@/services/transactions";
 import { can, Capability } from "@/lib/auth/rbac";
 import { suggestForRows } from "@/lib/categorisation-rules";
+import { ExpiredConnectionBanner } from "@/components/transactions/expired-connection-banner";
 import { PageHeader } from "@/components/shared/page-header";
 import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { InfoButton } from "@/components/shared/info-button";
@@ -15,7 +18,7 @@ import { TransactionsActions } from "@/components/transactions/transactions-acti
 import { TransactionsTable } from "@/components/transactions/transactions-table";
 import { InputChoiceCards } from "@/components/transactions/input-choice-cards";
 import { ConnectBankFeedButton } from "@/components/transactions/connect-bank-feed-button";
-import { ImportTransactionsButton } from "@/components/transactions/import-dialog";
+import { ImportWizardButton } from "@/components/transactions/import-wizard";
 import { formatPenceCompact } from "@/lib/format";
 
 export default async function TransactionsPage({
@@ -37,6 +40,10 @@ export default async function TransactionsPage({
     defaultPortfolioName,
     totals,
   } = await listTransactions(ctx.entityId, parseTransactionFilters(sp));
+
+  const expiredConnections = await prisma.bankConnection.count({
+    where: { accountId: ctx.entityId, status: BankConnStatus.EXPIRED },
+  });
 
   // Tenancy pickers + the rules-engine context.
   const tenancyOptions = tenancies.map((t) => ({
@@ -65,6 +72,7 @@ export default async function TransactionsPage({
   return (
     <div className="space-y-6">
       <SectionCoachmark section="transactions" />
+      <ExpiredConnectionBanner count={expiredConnections} />
       <PageHeader
         title="Transactions"
         description="A filterable ledger of rent and expenses — categorised to SA105 boxes for tax."
@@ -73,7 +81,13 @@ export default async function TransactionsPage({
             <InfoButton section="transactions" />
             {canManage ? (
               <>
-                <ImportTransactionsButton label="Import file" variant="secondary" />
+                <ImportWizardButton
+                  properties={properties}
+                  tenancies={tenancyOptions}
+                  canManageFiles={canManageFiles}
+                  label="Import file"
+                  variant="secondary"
+                />
                 <ConnectBankFeedButton label="Add bank feed" variant="primary" />
               </>
             ) : null}
@@ -82,7 +96,12 @@ export default async function TransactionsPage({
       />
 
       {totalCount === 0 ? (
-        <InputChoiceCards canManage={canManage} />
+        <InputChoiceCards
+          canManage={canManage}
+          canManageFiles={canManageFiles}
+          properties={properties}
+          tenancies={tenancyOptions}
+        />
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-3">

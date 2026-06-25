@@ -1,11 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Landmark } from "lucide-react";
-import { connectBankFeedAction } from "@/actions/bank";
 import { Button, type ButtonProps } from "@/components/ui/button";
 
+/** Entry point to the open-banking consent flow. */
 export function ConnectBankFeedButton({
   label = "Add bank feed",
   variant = "primary",
@@ -15,21 +14,11 @@ export function ConnectBankFeedButton({
   variant?: ButtonProps["variant"];
   className?: string;
 }) {
-  const [pending, start] = useTransition();
-  const router = useRouter();
   return (
-    <Button
-      variant={variant}
-      className={className}
-      disabled={pending}
-      onClick={() =>
-        start(async () => {
-          await connectBankFeedAction();
-          router.refresh();
-        })
-      }
-    >
-      <Landmark className="h-4 w-4" /> {pending ? "Connecting…" : label}
-    </Button>
+    <Link href="/transactions/connect">
+      <Button variant={variant} className={className}>
+        <Landmark className="h-4 w-4" /> {label}
+      </Button>
+    </Link>
   );
 }

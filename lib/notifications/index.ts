@@ -1,5 +1,8 @@
 // Per-account operational notification preferences (stored in Account.notificationPrefs Json).
 // Marketing opt-in is a *separate* Account boolean (a consent flag), not one of these.
+//
+// NOTE: this is the CLIENT-SAFE entry point (no prisma). Server code that creates
+// or reads in-app notifications imports from "@/lib/notifications/service".
 
 export const NotificationCategory = {
   complianceReminders: "complianceReminders",

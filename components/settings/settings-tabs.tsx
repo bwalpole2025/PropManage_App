@@ -11,6 +11,7 @@ export function SettingsTabs() {
     { href: "/settings/organization", label: "Organisation" },
     { href: "/settings/subscription", label: "Subscription" },
     { href: "/settings/notifications", label: "Notifications" },
+    { href: "/settings/banking", label: "Bank feeds" },
     { href: "/settings/team", label: "Team & access" },
     { href: "/settings/security", label: "Security" },
   ];

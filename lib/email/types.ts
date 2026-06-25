@@ -14,4 +14,13 @@ export interface EmailSender {
     name?: string | null;
     resetUrl: string;
   }): Promise<SendResult>;
+  /** Operational alert (e.g. rent overdue) gated by the account's notification prefs. */
+  sendOperationalAlert(input: {
+    to: string;
+    name?: string | null;
+    subject: string;
+    heading: string;
+    body: string;
+    href?: string | null;
+  }): Promise<SendResult>;
 }
