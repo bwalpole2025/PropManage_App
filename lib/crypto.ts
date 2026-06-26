@@ -21,9 +21,16 @@ function key(): Buffer {
   // key is acceptable there (and keeps demos/CI working without the env var).
   const secret = process.env.TOKEN_ENC_KEY;
   if (!secret) {
-    const realProvider = (process.env.BANK_FEED_PROVIDER ?? "mock") !== "mock";
+    // Fail CLOSED when ANY real provider's tokens are at stake — the bank feed OR
+    // HMRC MTD. The mocks store only deterministic non-secret strings, so the dev
+    // key is acceptable there.
+    const realProvider =
+      (process.env.BANK_FEED_PROVIDER ?? "mock") !== "mock" ||
+      (process.env.HMRC_MTD_MODE ?? "mock") !== "mock";
     if (process.env.NODE_ENV === "production" && realProvider) {
-      throw new Error("TOKEN_ENC_KEY must be set when using a real bank provider");
+      throw new Error(
+        "TOKEN_ENC_KEY must be set when using a real bank or HMRC provider",
+      );
     }
     return createHash("sha256").update(DEV_FALLBACK_KEY).digest();
   }
