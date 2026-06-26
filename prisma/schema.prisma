@@ -176,6 +176,7 @@ model Account {
   mtdConnection    MtdConnection?
   auditLogs        AuditLog[]
   notifications    Notification[]
+  notificationDispatches NotificationDispatch[]
   insurancePolicies InsurancePolicy[]
   documentCustomCategories DocumentCustomCategory[]
 
@@ -635,6 +636,26 @@ model Notification {
 
   @@index([accountId, userId, readAt])
   @@index([accountId, createdAt])
+}
+
+// Idempotency ledger for the notification dispatcher. Each logical reminder (a
+// document-expiry offset, an upcoming rent period, an MTD deadline, a bank
+// consent-expiry warning) claims a stable `dedupKey` exactly once before
+// fanning out to the enabled channels — guaranteeing a recurring sweep never
+// re-delivers the same event. `channels` records which channels were actually
+// sent (comma-joined), for observability/debugging.
+model NotificationDispatch {
+  id        String   @id @default(cuid())
+  accountId String
+  dedupKey  String
+  category  String // NotificationCategory
+  channels  String // comma-joined NotificationChannel values actually delivered
+  createdAt DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, dedupKey])
+  @@index([accountId])
 }
 
 // ---------------------------------------------------------------------------
