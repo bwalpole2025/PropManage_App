@@ -784,6 +784,9 @@ model MtdConnection {
   id                     String   @id @default(cuid())
   accountId       String   @unique
   hmrcUserId             String?
+  nino                   String?  // National Insurance number (per-connection HMRC identity)
+  deviceId               String?  // stable Gov-Client-Device-ID for fraud headers
+  oauthState             String?  // single-use OAuth state nonce, cleared on callback
   accessTokenEnc         String?
   refreshTokenEnc        String?
   expiresAt              DateTime?
@@ -792,9 +795,10 @@ model MtdConnection {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  entity      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  obligations MtdObligation[]
-  submissions MtdSubmission[]
+  entity       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  obligations  MtdObligation[]
+  submissions  MtdSubmission[]
+  calculations MtdCalculation[]
 }
 
 model MtdObligation {
@@ -815,21 +819,45 @@ model MtdObligation {
 }
 
 model MtdSubmission {
-  id              String   @id @default(cuid())
-  mtdConnectionId String
-  obligationId    String?
-  type            String   // SubmissionType
-  periodKey       String?
-  taxYearLabel    String?
-  payload         Json
-  status          String   @default("PENDING") // SubmissionStatus
-  hmrcReceiptId   String?
-  submittedAt     DateTime?
-  errorJson       Json?
-  createdAt       DateTime @default(now())
+  id                     String   @id @default(cuid())
+  mtdConnectionId        String
+  obligationId           String?
+  type                   String   // SubmissionType (incl. "EOPS")
+  periodKey              String?
+  taxYearLabel           String?
+  payload                Json
+  status                 String   @default("PENDING") // SubmissionStatus
+  hmrcReceiptId          String?
+  receiptJson            Json?
+  calculationId          String?
+  submittedByUserId      String?
+  submittedByMembershipId String?
+  submittedAt            DateTime?
+  errorJson              Json?
+  createdAt              DateTime @default(now())
 
   connection MtdConnection  @relation(fields: [mtdConnectionId], references: [id], onDelete: Cascade)
   obligation MtdObligation? @relation(fields: [obligationId], references: [id])
 
   @@index([mtdConnectionId])
+}
+
+model MtdCalculation {
+  id                              String   @id @default(cuid())
+  mtdConnectionId                 String
+  taxYearLabel                    String
+  calculationId                   String   @unique
+  status                          String   @default("PENDING") // CalcStatus
+  kind                            String   @default("estimate") // CalcKind: estimate | crystallised
+  totalIncomePence                Int?
+  totalAllowancesAndDeductionsPence Int?
+  totalTaxableIncomePence         Int?
+  incomeTaxAndNicsDuePence        Int?
+  resultJson                      Json?
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+
+  connection MtdConnection @relation(fields: [mtdConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([mtdConnectionId, taxYearLabel])
 }
