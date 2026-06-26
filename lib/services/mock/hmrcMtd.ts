@@ -103,27 +103,31 @@ export class MockHmrcMtdService implements HmrcMtdService {
   async exchangeCode(input: { entityId: string; code: string; redirectUri: string }) {
     const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
     const hmrcUserId = `mock-hmrc-${input.entityId}`;
-    const conn = await prisma.mtdConnection.upsert({
-      where: { accountId: input.entityId },
-      create: {
-        accountId: input.entityId,
+    const tokens = {
+      hmrcUserId,
+      nino: "AA000000A",
+      accessTokenEnc: encryptToken(`mock-access-${input.entityId}`),
+      refreshTokenEnc: encryptToken(`mock-refresh-${input.entityId}`),
+      expiresAt,
+    };
+    // Persist synthetic encrypted tokens like the real adapter. When the entity
+    // isn't a real Account (e.g. the standalone drive), fall back to a synthetic
+    // connection id rather than violating the FK.
+    try {
+      const conn = await prisma.mtdConnection.upsert({
+        where: { accountId: input.entityId },
+        create: { accountId: input.entityId, status: MtdStatus.NOT_CONNECTED, ...tokens },
+        update: tokens,
+        select: { id: true },
+      });
+      return { connectionId: conn.id, expiresAt: expiresAt.toISOString(), hmrcUserId };
+    } catch {
+      return {
+        connectionId: `mock-mtd-${input.entityId}`,
+        expiresAt: expiresAt.toISOString(),
         hmrcUserId,
-        nino: "AA000000A",
-        accessTokenEnc: encryptToken(`mock-access-${input.entityId}`),
-        refreshTokenEnc: encryptToken(`mock-refresh-${input.entityId}`),
-        expiresAt,
-        status: MtdStatus.NOT_CONNECTED, // callback flips to CONNECTED
-      },
-      update: {
-        hmrcUserId,
-        nino: "AA000000A",
-        accessTokenEnc: encryptToken(`mock-access-${input.entityId}`),
-        refreshTokenEnc: encryptToken(`mock-refresh-${input.entityId}`),
-        expiresAt,
-      },
-      select: { id: true },
-    });
-    return { connectionId: conn.id, expiresAt: expiresAt.toISOString(), hmrcUserId };
+      };
+    }
   }
 
   async listIncomeSources(): Promise<MtdIncomeSourceDTO[]> {

@@ -1,8 +1,9 @@
 import { LandlordType, LandlordTypeLabel } from "@/lib/enums";
 import { Sa105Box, Sa105BoxLabel } from "@/lib/sa105";
 import { getTaxYearConfig, type TaxBand } from "@/lib/tax-config";
-import { taxYearLabelFor } from "@/lib/format";
+import { formatDate, taxYearLabelFor } from "@/lib/format";
 import { toCsv } from "@/lib/csv";
+import type { ReportDocument } from "@/lib/reports/types";
 import { getTaxEstimate } from "./tax";
 import { getOwnerTaxEstimates } from "./owner-tax";
 
@@ -222,4 +223,90 @@ export function taxStatementReportToCsv(report: TaxStatementReport): string {
   row();
   row(report.disclaimer);
   return toCsv(rows);
+}
+
+/**
+ * The tax statement as a generic ReportDocument so it can share the report PDF
+ * renderer (lib/reports/pdf). Mirrors the on-screen SA105 layout: income lines,
+ * expense lines, the tax-forecast summary and per-owner figures.
+ */
+export function taxStatementReportToDocument(report: TaxStatementReport): ReportDocument {
+  const sa105Cols = [
+    { key: "box", label: "Box" },
+    { key: "label", label: "Description" },
+    { key: "amount", label: "Amount", type: "currency" as const },
+  ];
+
+  const summary: ReportDocument["sections"][number]["summary"] = [
+    { label: "Total income", pence: report.totalIncomePence, tone: "income" },
+    { label: "Allowable expenses", pence: report.totalAllowableExpensesPence, tone: "expense" },
+  ];
+  if (report.propertyAllowanceUsedPence > 0) {
+    summary.push({ label: "Property allowance", pence: report.propertyAllowanceUsedPence });
+  }
+  summary.push({ label: "Taxable profit", pence: report.taxableProfitPence, tone: "auto" });
+  if (report.financeCostsPence > 0) {
+    summary.push({ label: "Finance costs", pence: report.financeCostsPence });
+  }
+  if (report.financeCostTaxReductionPence > 0) {
+    summary.push({ label: "Finance-cost tax reduction", pence: report.financeCostTaxReductionPence });
+  }
+  summary.push({ label: "Estimated tax", pence: report.estimatedTaxPence, emphasis: true });
+
+  return {
+    slug: "tax-statement",
+    title: "Hammock Tax Statement (SA105)",
+    subtitle: `${report.entityName} · ${report.landlordTypeLabel}`,
+    meta: [`Tax year: ${report.taxYear}`, `Generated: ${formatDate(new Date())}`],
+    sections: [
+      {
+        title: "Income",
+        tables: [
+          {
+            columns: sa105Cols,
+            rows: report.incomeLines.map((l) => ({ box: l.box, label: l.label, amount: l.amountPence })),
+            totals: { box: "", label: "Total income", amount: report.totalIncomePence },
+            emptyText: "No income categorised in this tax year.",
+          },
+        ],
+      },
+      {
+        title: "Expenses",
+        tables: [
+          {
+            columns: sa105Cols,
+            rows: report.expenseLines.map((l) => ({ box: l.box, label: l.label, amount: l.amountPence })),
+            totals: { box: "", label: "Allowable expenses", amount: report.totalAllowableExpensesPence },
+            emptyText: "No expenses categorised in this tax year.",
+          },
+        ],
+      },
+      { title: "Tax forecast", summary },
+      {
+        title: "Per-owner figures",
+        tables: [
+          {
+            columns: [
+              { key: "owner", label: "Owner" },
+              { key: "properties", label: "Properties", type: "number" as const },
+              { key: "income", label: "Taxable income", type: "currency" as const },
+              { key: "expenses", label: "Allowable expenses", type: "currency" as const },
+              { key: "profit", label: "Taxable profit", type: "currency" as const },
+              { key: "tax", label: "Est. tax", type: "currency" as const },
+            ],
+            rows: report.owners.map((o) => ({
+              owner: o.legalName,
+              properties: o.ownedPropertyCount,
+              income: o.totalIncomePence,
+              expenses: o.totalAllowableExpensesPence,
+              profit: o.taxableProfitPence,
+              tax: o.estimatedTaxPence,
+            })),
+            emptyText: "No beneficial owners with property shares yet.",
+          },
+        ],
+      },
+    ],
+    disclaimer: report.disclaimer,
+  };
 }

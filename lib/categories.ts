@@ -19,6 +19,10 @@ import {
 export const ExtraCategory = {
   DEPOSIT: "DEPOSIT",
   CAPITAL_EXPENDITURE: "CAPITAL_EXPENDITURE",
+  // A director lending money to / drawing money from their company. Like the
+  // others, kept OUT of `Sa105Category` so it never enters the tax estimate — a
+  // directors' loan is a balance-sheet movement, not taxable income/expense.
+  DIRECTORS_LOAN: "DIRECTORS_LOAN",
 } as const;
 export type ExtraCategory = (typeof ExtraCategory)[keyof typeof ExtraCategory];
 
@@ -28,6 +32,7 @@ export type AllCategory = Sa105Category | ExtraCategory;
 export const ExtraCategoryLabel: Record<ExtraCategory, string> = {
   DEPOSIT: "Tenancy deposit",
   CAPITAL_EXPENDITURE: "Capital expenditure",
+  DIRECTORS_LOAN: "Directors' loan",
 };
 
 export const allCategoryLabel: Record<AllCategory, string> = {
@@ -38,6 +43,9 @@ export const allCategoryLabel: Record<AllCategory, string> = {
 export const ExtraCategoryDirection: Record<ExtraCategory, TxnDirection> = {
   DEPOSIT: TxnDirection.INCOME,
   CAPITAL_EXPENDITURE: TxnDirection.EXPENSE,
+  // Default for the picker; a real movement carries its own direction (a director
+  // introducing capital is INCOME, a repayment/drawing is EXPENSE).
+  DIRECTORS_LOAN: TxnDirection.EXPENSE,
 };
 
 export const allCategoryDirection: Record<AllCategory, TxnDirection> = {
@@ -52,6 +60,7 @@ export const ALL_INCOME_CATEGORIES: AllCategory[] = [
 export const ALL_EXPENSE_CATEGORIES: AllCategory[] = [
   ...EXPENSE_CATEGORIES,
   ExtraCategory.CAPITAL_EXPENDITURE,
+  ExtraCategory.DIRECTORS_LOAN,
 ];
 
 export function isKnownCategory(v: string | null | undefined): v is AllCategory {
@@ -74,6 +83,7 @@ export type CategoryTreatment =
 
 export function categoryTreatment(c: AllCategory): CategoryTreatment {
   if (c === ExtraCategory.DEPOSIT) return "NON_TAXABLE";
+  if (c === ExtraCategory.DIRECTORS_LOAN) return "NON_TAXABLE";
   if (c === ExtraCategory.CAPITAL_EXPENDITURE) return "CAPITAL";
   if (c === Sa105Category.MORTGAGE_INTEREST) return "FINANCE_COST";
   if (allCategoryDirection[c] === TxnDirection.INCOME) return "INCOME";

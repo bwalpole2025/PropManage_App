@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, FileText } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { getTaxStatementReport } from "@/services/tax-report";
 import { recentTaxYears, formatPence } from "@/lib/format";
@@ -56,11 +56,22 @@ export default async function TaxStatementReportPage({
         title="Tax Statement (SA105)"
         description={`${report.entityName} · ${report.landlordTypeLabel} · ${report.taxYear}`}
         actions={
-          <a href={`/reports/tax-statement/export?${exportParams.toString()}`}>
-            <Button variant="outline">
-              <Download className="h-4 w-4" /> Download CSV
-            </Button>
-          </a>
+          <>
+            <a
+              href={`/reports/tax-statement/export?${exportParams.toString()}&format=pdf`}
+              target="_blank"
+              rel="noopener"
+            >
+              <Button variant="outline">
+                <FileText className="h-4 w-4" /> PDF
+              </Button>
+            </a>
+            <a href={`/reports/tax-statement/export?${exportParams.toString()}`}>
+              <Button variant="outline">
+                <Download className="h-4 w-4" /> CSV
+              </Button>
+            </a>
+          </>
         }
       />
 

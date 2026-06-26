@@ -166,6 +166,8 @@ export interface HmrcMtdService {
   listIncomeSources(input: {
     entityId: EntityId;
     agentContext?: AgentContext;
+    /** Pre-built HMRC fraud-prevention headers (Gov-Client / Gov-Vendor). */
+    fraudHeaders?: Record<string, string>;
   }): Promise<MtdIncomeSourceDTO[]>;
 
   getObligations(input: {
@@ -173,6 +175,8 @@ export interface HmrcMtdService {
     taxYear: string;
     type?: ObligationType;
     agentContext?: AgentContext;
+    /** Pre-built HMRC fraud-prevention headers (Gov-Client / Gov-Vendor). */
+    fraudHeaders?: Record<string, string>;
   }): Promise<MtdObligationDTO[]>;
 
   submitQuarterlyUpdate(input: {
@@ -180,6 +184,8 @@ export interface HmrcMtdService {
     periodKey: string;
     summary: PropertyIncomeSummary;
     agentContext?: AgentContext;
+    /** Pre-built HMRC fraud-prevention headers (Gov-Client / Gov-Vendor). */
+    fraudHeaders?: Record<string, string>;
   }): Promise<{ submissionId: string; receiptId: string; status: SubmissionStatus }>;
 
   /** Trigger HMRC's (async) tax calculation; returns the id to poll with getCalculation. */
@@ -188,6 +194,8 @@ export interface HmrcMtdService {
     taxYear: string;
     calculationType?: "in-year" | "final-declaration";
     agentContext?: AgentContext;
+    /** Pre-built HMRC fraud-prevention headers (Gov-Client / Gov-Vendor). */
+    fraudHeaders?: Record<string, string>;
   }): Promise<{ calculationId: string }>;
 
   /** Fetch a calculation result; caller polls until status !== "PENDING". */
@@ -196,6 +204,8 @@ export interface HmrcMtdService {
     taxYear: string;
     calculationId: string;
     agentContext?: AgentContext;
+    /** Pre-built HMRC fraud-prevention headers (Gov-Client / Gov-Vendor). */
+    fraudHeaders?: Record<string, string>;
   }): Promise<MtdCalculationDTO>;
 
   getBusinessIncomeSourceSummary(input: {
@@ -209,6 +219,8 @@ export interface HmrcMtdService {
     taxYear: string;
     businessId: string;
     agentContext?: AgentContext;
+    /** Pre-built HMRC fraud-prevention headers (Gov-Client / Gov-Vendor). */
+    fraudHeaders?: Record<string, string>;
   }): Promise<{ submissionId: string; receiptId: string; status: SubmissionStatus }>;
 
   /** Final Declaration (crystallisation) of the whole return for a tax year. */
@@ -217,6 +229,8 @@ export interface HmrcMtdService {
     taxYear: string;
     calculationId: string;
     agentContext?: AgentContext;
+    /** Pre-built HMRC fraud-prevention headers (Gov-Client / Gov-Vendor). */
+    fraudHeaders?: Record<string, string>;
   }): Promise<{ submissionId: string; receiptId: string; status: SubmissionStatus }>;
 
   refreshTokens(entityId: EntityId): Promise<{ expiresAt: Iso }>;

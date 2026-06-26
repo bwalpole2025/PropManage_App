@@ -13,6 +13,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { Sa105Category } from "../lib/sa105";
+import { ExtraCategory } from "../lib/categories";
 import { taxYearLabelFor, taxYearStartDate } from "../lib/format";
 import {
   DocumentCategory,
@@ -653,6 +654,57 @@ async function main() {
       description: "Monthly rent received",
       category: Sa105Category.RENT_INCOME,
       source: TxnSource.BANK_FEED,
+      status: TxnStatus.RECONCILED,
+    })),
+  });
+
+  // --- Directors & directors'-loan movements for entity B (limited company) ---
+  // Two directors of Hayes Lettings Ltd and their loan-account movements (capital
+  // introduced / drawings). Category DIRECTORS_LOAN is non-taxable (kept out of
+  // SA105) and attributed to a director via `subcategory`. Dated within the
+  // current tax year so the Directors' Loans report shows data by default.
+  await prisma.beneficialOwner.createMany({
+    data: [
+      {
+        accountId: entityB.id,
+        type: "individual",
+        legalName: "Jordan Hayes",
+        userId: landlord.id,
+        portfolioId: businessPortfolioB.id,
+      },
+      {
+        accountId: entityB.id,
+        type: "individual",
+        legalName: "Morgan Hayes",
+        portfolioId: businessPortfolioB.id,
+      },
+    ],
+  });
+
+  const directorLoans: Array<{
+    director: string;
+    direction: string;
+    amountPence: number;
+    days: number;
+    description: string;
+  }> = [
+    { director: "Jordan Hayes", direction: TxnDirection.INCOME, amountPence: 2_000_000, days: -75, description: "Director's loan — capital introduced" },
+    { director: "Jordan Hayes", direction: TxnDirection.EXPENSE, amountPence: 500_000, days: -40, description: "Director's loan — repayment to director" },
+    { director: "Jordan Hayes", direction: TxnDirection.INCOME, amountPence: 300_000, days: -15, description: "Director's loan — company expense paid personally" },
+    { director: "Morgan Hayes", direction: TxnDirection.INCOME, amountPence: 800_000, days: -60, description: "Director's loan — capital introduced" },
+    { director: "Morgan Hayes", direction: TxnDirection.EXPENSE, amountPence: 200_000, days: -20, description: "Director's loan — drawings" },
+    { director: "Jordan Hayes", direction: TxnDirection.INCOME, amountPence: 150_000, days: -120, description: "Director's loan — prior-period top-up" },
+  ];
+  await prisma.transaction.createMany({
+    data: directorLoans.map((d) => ({
+      accountId: entityB.id,
+      direction: d.direction,
+      amountPence: d.amountPence,
+      date: daysFromNow(d.days),
+      description: d.description,
+      category: ExtraCategory.DIRECTORS_LOAN,
+      subcategory: d.director,
+      source: TxnSource.MANUAL,
       status: TxnStatus.RECONCILED,
     })),
   });

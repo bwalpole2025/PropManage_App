@@ -9,6 +9,7 @@
 
 import { MockBankFeedService } from "./mock/bankFeed";
 import { MockHmrcMtdService } from "./mock/hmrcMtd";
+import { RealHmrcMtdService } from "./real/hmrcMtd";
 import { MockDocumentStorage } from "./mock/documentStorage";
 import { MockPaymentService } from "./mock/payment";
 import { S3Storage } from "./real/documentStorage";
@@ -35,9 +36,10 @@ function makeBankFeed(): BankFeedService {
 
 function makeHmrc(): HmrcMtdService {
   const mode = process.env.HMRC_MTD_MODE ?? "mock";
+  // forceMocks (dev/CI) keeps the acceptance path on the faithful mock; only an
+  // explicit production HMRC_MTD_MODE=hmrc routes to the real sandbox adapter.
   if (forceMocks || mode === "mock") return new MockHmrcMtdService();
-  // Real HMRC MTD client plugs in here behind the same interface.
-  return new MockHmrcMtdService();
+  return new RealHmrcMtdService();
 }
 
 function makeStorage(): DocumentStorage {
