@@ -8,6 +8,7 @@
 // Outside production we default to mock so screens are fully usable locally.
 
 import { MockBankFeedService } from "./mock/bankFeed";
+import { TrueLayerBankFeedService } from "./real/bankFeed";
 import { MockHmrcMtdService } from "./mock/hmrcMtd";
 import { RealHmrcMtdService } from "./real/hmrcMtd";
 import { MockDocumentStorage } from "./mock/documentStorage";
@@ -28,9 +29,11 @@ const forceMocks =
 
 function makeBankFeed(): BankFeedService {
   const provider = process.env.BANK_FEED_PROVIDER ?? "mock";
+  // forceMocks (dev/CI) keeps the demo flow on the in-memory feed; only an
+  // explicit production BANK_FEED_PROVIDER=truelayer routes to the real adapter.
   if (forceMocks || provider === "mock") return new MockBankFeedService();
-  // Real implementations (e.g. TrueLayer/Plaid) plug in here behind the same
-  // interface. Until then, fall back to mock rather than crashing.
+  if (provider === "truelayer") return new TrueLayerBankFeedService();
+  // Unknown provider: fall back to mock rather than crashing.
   return new MockBankFeedService();
 }
 

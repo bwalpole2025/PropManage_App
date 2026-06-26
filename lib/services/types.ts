@@ -121,7 +121,18 @@ export interface BankFeedService {
     entityId: EntityId;
     linkSessionId: string;
     code: string;
-  }): Promise<{ connectionId: string; accounts: BankAccountDTO[] }>;
+  }): Promise<{
+    connectionId: string;
+    accounts: BankAccountDTO[];
+    // Opaque provider tokens for a REAL feed — the caller encrypts + persists
+    // them (never raw bank credentials). Omitted by the mock, which has none.
+    accessToken?: string;
+    refreshToken?: string;
+    /** Absolute consent/token expiry to store on the connection. */
+    expiresAt?: Iso;
+    /** Provider-reported institution name (e.g. "Monzo"), if known. */
+    institutionName?: string;
+  }>;
 
   listAccounts(connectionId: string): Promise<BankAccountDTO[]>;
 
@@ -130,11 +141,18 @@ export interface BankFeedService {
     from: Iso;
     to: Iso;
     cursor?: string;
+    // Our BankConnection id — lets a real adapter load the exact access token
+    // (the same provider account can be linked under more than one connection).
+    connectionId?: string;
   }): Promise<{ transactions: BankTransactionDTO[]; nextCursor?: string }>;
 
   handleWebhook(input: {
     headers: Record<string, string>;
     rawBody: string;
+    // The receiving request's method + path — part of the bytes a real provider
+    // signs (TrueLayer's Tl-Signature), so both are needed to verify it.
+    method?: string;
+    path?: string;
   }): Promise<BankWebhookEvent>;
 
   refreshConnection(connectionId: string): Promise<{ status: BankConnStatus }>;

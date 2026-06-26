@@ -4,18 +4,30 @@ import { prisma } from "@/lib/db";
 import { services } from "@/lib/services";
 import { BankConnStatus } from "@/lib/enums";
 import { ingestBankConnection } from "@/lib/bank-ingest";
+import { WebhookSignatureError } from "@/lib/banking/webhook-signature";
 
-// Provider push endpoint. Unauthenticated externally — PRODUCTION MUST verify an
-// HMAC signature over the raw body against the shared provider secret before
-// trusting the event. Runs in the Next request (no worker needed).
+// Provider push endpoint. Unauthenticated externally: the adapter's handleWebhook
+// VERIFIES the provider's signature over the raw body (TrueLayer's Tl-Signature)
+// before we trust the event — an unsigned/forged call never reaches ingestion.
+// Runs in the Next request (no worker needed).
 export async function POST(req: Request) {
   const rawBody = await req.text();
   const headers = Object.fromEntries(req.headers.entries());
+  const path = new URL(req.url).pathname;
 
   let event;
   try {
-    event = await services.bankFeed.handleWebhook({ headers, rawBody });
-  } catch {
+    event = await services.bankFeed.handleWebhook({
+      headers,
+      rawBody,
+      method: req.method,
+      path,
+    });
+  } catch (e) {
+    // A bad/absent signature is an auth failure (401); anything else is a 400.
+    if (e instanceof WebhookSignatureError) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
     return NextResponse.json({ error: "Bad payload" }, { status: 400 });
   }
 

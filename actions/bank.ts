@@ -16,6 +16,7 @@ import { parseCsv } from "@/lib/csv";
 import { randomUUID } from "node:crypto";
 import { encryptToken } from "@/lib/crypto";
 import { ingestBankConnection } from "@/lib/bank-ingest";
+import { persistBankLink } from "@/lib/banking/link";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
 import { recordAudit, AuditAction } from "@/lib/audit";
@@ -62,76 +63,13 @@ export async function completeBankLinkAction(input: {
   const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
 
-  const linked = await services.bankFeed.completeLink({
+  return persistBankLink({
     entityId,
+    actorUserId: user.id,
     linkSessionId: input.linkSessionId,
     code: input.code,
+    institutionName: input.institutionName,
   });
-
-  const expiresAt = new Date(Date.now() + CONSENT_WINDOW_MS);
-  const tokenData = {
-    status: BankConnStatus.ACTIVE,
-    expiresAt,
-    accessTokenEnc: encryptToken(`mock-access-${linked.connectionId}`),
-    refreshTokenEnc: encryptToken(`mock-refresh-${linked.connectionId}`),
-    institutionName: input.institutionName ?? "Mock Bank (demo)",
-  };
-
-  const existing = await prisma.bankConnection.findFirst({
-    where: { accountId: entityId, providerConnectionId: linked.connectionId },
-    select: { id: true },
-  });
-  const connection = existing
-    ? await prisma.bankConnection.update({
-        where: { id: existing.id },
-        data: tokenData,
-        select: { id: true },
-      })
-    : await prisma.bankConnection.create({
-        data: {
-          accountId: entityId,
-          provider: services.bankFeed.providerName,
-          providerConnectionId: linked.connectionId,
-          ...tokenData,
-        },
-        select: { id: true },
-      });
-
-  for (const acc of linked.accounts) {
-    const found = await prisma.bankAccount.findFirst({
-      where: { bankConnectionId: connection.id, providerAccountId: acc.id },
-      select: { id: true },
-    });
-    if (!found) {
-      await prisma.bankAccount.create({
-        data: {
-          bankConnectionId: connection.id,
-          providerAccountId: acc.id,
-          name: acc.name,
-          sortCode: acc.sortCode ?? null,
-          accountNumberMasked: acc.accountNumberMasked ?? null,
-        },
-      });
-    }
-  }
-
-  // Historical import — no per-payment notifications for the backfill.
-  const { imported } = await ingestBankConnection(connection.id, { notify: false });
-  await recordAudit({
-    accountId: entityId,
-    actorUserId: user.id,
-    action: AuditAction.BANK_CONNECT,
-    targetType: "BankConnection",
-    targetId: connection.id,
-    metadata: {
-      provider: services.bankFeed.providerName,
-      institutionName: input.institutionName ?? null,
-      imported,
-    },
-  });
-  revalidateTxn();
-  revalidateBanking();
-  return { imported, connectionId: connection.id };
 }
 
 /** Backward-compatible one-shot connect (start + complete with the mock code). */

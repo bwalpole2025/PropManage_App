@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { can, Capability } from "@/lib/auth/rbac";
@@ -17,6 +18,12 @@ export default async function ConnectBankPage() {
     entityId: ctx.entityId,
     redirectUri: "/transactions/connect",
   });
+
+  // A real provider (TrueLayer) returns an absolute hosted-consent URL — send
+  // the user straight there. The mock returns an in-app path, handled below.
+  if (/^https?:\/\//.test(session.linkUrl)) {
+    redirect(session.linkUrl);
+  }
 
   return (
     <div className="space-y-6">

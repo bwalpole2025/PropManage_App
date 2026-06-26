@@ -62,6 +62,7 @@ export async function ingestBankConnection(
       accountId: account.providerAccountId,
       from: from.toISOString(),
       to: to.toISOString(),
+      connectionId: connection.id,
     });
     for (const t of transactions) {
       try {
