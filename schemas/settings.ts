@@ -37,9 +37,18 @@ export const organizationSchema = z.object({
 export const notificationPrefsSchema = z.object({
   marketingOptIn: z.coerce.boolean(),
   prefs: z.object({
-    complianceReminders: z.coerce.boolean(),
-    rentAndArrears: z.coerce.boolean(),
-    monthlySummary: z.coerce.boolean(),
-    productUpdates: z.coerce.boolean(),
+    channels: z.object({
+      inApp: z.coerce.boolean(),
+      email: z.coerce.boolean(),
+      push: z.coerce.boolean(),
+    }),
+    categories: z.object({
+      complianceReminders: z.coerce.boolean(),
+      rentAndArrears: z.coerce.boolean(),
+      taxDeadlines: z.coerce.boolean(),
+      bankFeed: z.coerce.boolean(),
+      monthlySummary: z.coerce.boolean(),
+      productUpdates: z.coerce.boolean(),
+    }),
   }),
 });

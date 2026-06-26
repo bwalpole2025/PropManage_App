@@ -2,7 +2,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { recipientIds } from "@/lib/notifications/service";
 import { MockEmailSender, getOutbox, clearOutbox } from "@/lib/email/mock";
 import { operationalAlertEmail } from "@/lib/email/templates";
-import { parseNotificationPrefs } from "@/lib/notifications";
+import {
+  parseNotificationPrefs,
+  resolveDeliveryChannels,
+  DEFAULT_NOTIFICATION_PREFS,
+  NotificationCategory,
+  NotificationChannel,
+} from "@/lib/notifications";
 
 describe("recipientIds (notification fan-out)", () => {
   it("includes the principal and dedupes members", () => {
@@ -41,8 +47,72 @@ describe("operational alert email + prefs gate", () => {
     expect(getOutbox()[0].to).toBe("landlord@example.com");
   });
 
-  it("rentAndArrears pref controls the email (default on)", () => {
-    expect(parseNotificationPrefs({}).rentAndArrears).toBe(true);
-    expect(parseNotificationPrefs({ rentAndArrears: false }).rentAndArrears).toBe(false);
+  it("rentAndArrears category defaults on and honours a stored false", () => {
+    expect(parseNotificationPrefs({}).categories.rentAndArrears).toBe(true);
+    expect(
+      parseNotificationPrefs({ categories: { rentAndArrears: false } })
+        .categories.rentAndArrears,
+    ).toBe(false);
+  });
+});
+
+// The acceptance criterion, at the level of the pure rule the dispatcher applies:
+// "exactly one reminder per configured channel; disabling a preference suppresses it."
+describe("resolveDeliveryChannels (per-channel delivery contract)", () => {
+  const ALL = [
+    NotificationChannel.inApp,
+    NotificationChannel.email,
+    NotificationChannel.push,
+  ];
+
+  it("delivers on every configured channel for an enabled category", () => {
+    const prefs = parseNotificationPrefs({
+      channels: { inApp: true, email: true, push: true },
+    });
+    const channels = resolveDeliveryChannels(
+      prefs,
+      NotificationCategory.complianceReminders,
+    );
+    expect(channels.sort()).toEqual([...ALL].sort());
+    // No duplicates → exactly one delivery per channel.
+    expect(new Set(channels).size).toBe(channels.length);
+  });
+
+  it("disabling a single channel suppresses just that channel", () => {
+    const prefs = parseNotificationPrefs({
+      channels: { inApp: true, email: false, push: true },
+    });
+    const channels = resolveDeliveryChannels(
+      prefs,
+      NotificationCategory.complianceReminders,
+    );
+    expect(channels).not.toContain(NotificationChannel.email);
+    expect(channels).toContain(NotificationChannel.inApp);
+    expect(channels).toContain(NotificationChannel.push);
+  });
+
+  it("disabling the category suppresses delivery on all channels", () => {
+    const prefs = parseNotificationPrefs({
+      channels: { inApp: true, email: true, push: true },
+      categories: { complianceReminders: false },
+    });
+    expect(
+      resolveDeliveryChannels(prefs, NotificationCategory.complianceReminders),
+    ).toEqual([]);
+    // Other categories are unaffected.
+    expect(
+      resolveDeliveryChannels(prefs, NotificationCategory.rentAndArrears).length,
+    ).toBe(3);
+  });
+
+  it("the default prefs deliver compliance on in-app + email (push off by default)", () => {
+    const channels = resolveDeliveryChannels(
+      DEFAULT_NOTIFICATION_PREFS,
+      NotificationCategory.complianceReminders,
+    );
+    expect(channels).toEqual([
+      NotificationChannel.inApp,
+      NotificationChannel.email,
+    ]);
   });
 });

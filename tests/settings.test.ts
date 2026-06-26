@@ -21,25 +21,38 @@ describe("taxYearOptions", () => {
 });
 
 describe("parseNotificationPrefs", () => {
-  it("defaults every category to true when the column is null/empty", () => {
+  it("defaults all channels + categories when the column is null/empty", () => {
     expect(parseNotificationPrefs(null)).toEqual(DEFAULT_NOTIFICATION_PREFS);
     expect(parseNotificationPrefs({})).toEqual(DEFAULT_NOTIFICATION_PREFS);
   });
 
-  it("honours stored booleans and ignores unknown keys", () => {
+  it("reads the nested channels + categories shape and ignores unknown keys", () => {
     const parsed = parseNotificationPrefs({
-      [NotificationCategory.complianceReminders]: false,
+      channels: { email: false },
+      categories: { [NotificationCategory.complianceReminders]: false },
       somethingElse: 123,
     });
-    expect(parsed.complianceReminders).toBe(false);
-    expect(parsed.rentAndArrears).toBe(true); // unset → default true
-    expect("somethingElse" in parsed).toBe(false);
+    expect(parsed.channels.email).toBe(false);
+    expect(parsed.channels.inApp).toBe(true); // unset → default
+    expect(parsed.categories.complianceReminders).toBe(false);
+    expect(parsed.categories.rentAndArrears).toBe(true); // unset → default true
+  });
+
+  it("lifts the LEGACY flat category shape into `categories` (back-compat)", () => {
+    // Older rows stored category booleans at the top level, no `channels`.
+    const parsed = parseNotificationPrefs({
+      [NotificationCategory.complianceReminders]: false,
+      [NotificationCategory.rentAndArrears]: true,
+    });
+    expect(parsed.categories.complianceReminders).toBe(false);
+    expect(parsed.categories.rentAndArrears).toBe(true);
+    expect(parsed.channels).toEqual(DEFAULT_NOTIFICATION_PREFS.channels);
   });
 
   it("returns a fully-populated object for every category", () => {
     const parsed = parseNotificationPrefs(undefined);
     for (const key of Object.values(NotificationCategory)) {
-      expect(typeof parsed[key]).toBe("boolean");
+      expect(typeof parsed.categories[key]).toBe("boolean");
     }
   });
 });
