@@ -79,11 +79,25 @@ export async function createDocument(
   const expiry = input.expiryDate ?? null;
   const offsets = [...DEFAULT_REMINDER_OFFSETS_DAYS];
 
-  // Always materialise the 30/14/7/1-day reminder rows when there's an expiry.
-  // Whether each one is actually *delivered* (and on which channels) is decided
-  // at fire time by the dispatcher against the account's current preferences —
-  // so toggling `complianceReminders` later takes effect retroactively, and a
-  // document created while reminders were off still nudges once they're on.
+  // Materialise the 30/14/7/1-day reminder rows when there's an expiry, but only
+  // for offsets whose fire date hasn't already lapsed at creation — so a
+  // document expiring in 7 days schedules the 7- and 1-day reminders, NOT a
+  // spurious "expires in 30 days" that would fire immediately. Whether each one
+  // is actually *delivered* (and on which channels) is decided at fire time by
+  // the dispatcher against the account's current preferences — so toggling
+  // `complianceReminders` later takes effect retroactively.
+  const now = new Date();
+  const todayMs = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  const dueReminders = expiry
+    ? offsets
+        .map((o) => ({ offsetDays: o, fireOn: new Date(expiry.getTime() - o * DAY_MS) }))
+        .filter((r) => r.fireOn.getTime() >= todayMs)
+    : [];
+
   return prisma.document.create({
     data: {
       accountId: entityId,
@@ -95,13 +109,8 @@ export async function createDocument(
       reference: input.reference || null,
       fileId: input.fileId || null,
       reminderOffsetsDays: expiry ? offsets : [],
-      reminders: expiry
-        ? {
-            create: offsets.map((o) => ({
-              offsetDays: o,
-              fireOn: new Date(expiry.getTime() - o * DAY_MS),
-            })),
-          }
+      reminders: dueReminders.length
+        ? { create: dueReminders }
         : undefined,
       userReminders: expiry
         ? {
