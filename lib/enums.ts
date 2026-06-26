@@ -197,6 +197,7 @@ export const NotificationKind = {
   PAYMENT_RECEIVED: "PAYMENT_RECEIVED",
   RENT_OVERDUE: "RENT_OVERDUE",
   COMPLIANCE_EXPIRY: "COMPLIANCE_EXPIRY",
+  REMINDER: "REMINDER",
 } as const;
 export type NotificationKind =
   (typeof NotificationKind)[keyof typeof NotificationKind];
@@ -205,6 +206,7 @@ export const NotificationKindLabel: Record<NotificationKind, string> = {
   PAYMENT_RECEIVED: "Payment received",
   RENT_OVERDUE: "Rent overdue",
   COMPLIANCE_EXPIRY: "Document expiring",
+  REMINDER: "Reminder",
 };
 
 export const ComplianceType = {

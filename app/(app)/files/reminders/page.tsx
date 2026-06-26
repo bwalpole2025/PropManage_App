@@ -1,60 +1,48 @@
-import { CalendarClock } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
-import { getFilesAndDates } from "@/services/files";
+import { can, Capability } from "@/lib/auth/rbac";
+import { getRemindersScreen } from "@/services/reminders";
 import { PageHeader } from "@/components/shared/page-header";
-import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { formatDate, relativeDays } from "@/lib/format";
-import { ImportantDateKindLabel } from "@/lib/enums";
+import { RemindersTabs } from "@/components/reminders/reminders-tabs";
+import { RemindersTable } from "@/components/reminders/reminders-table";
+import { NewReminderDialog } from "@/components/reminders/new-reminder-dialog";
+import { ClearCompletedButton } from "@/components/reminders/clear-completed-button";
 
-export default async function RemindersPage() {
+export default async function RemindersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
   const ctx = await getActiveContext();
-  const { reminders } = await getFilesAndDates(ctx.entityId);
+  const canManage = can(ctx.role, Capability.MANAGE_PROPERTIES);
+  const screen = await getRemindersScreen(ctx.entityId, { tab: sp.tab });
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Reminders"
-        description="Renewals, rent reviews, mortgage and inspection dates — soonest first."
+        description="Renewals, inspections and key dates — track what's outstanding and what's done."
+        actions={
+          canManage ? (
+            <NewReminderDialog
+              properties={screen.properties}
+              tenancies={screen.tenancies}
+            />
+          ) : undefined
+        }
       />
 
+      <div className="flex items-center justify-between gap-3">
+        <RemindersTabs counts={screen.counts} />
+        {screen.tab === "completed" && canManage ? (
+          <ClearCompletedButton disabled={screen.counts.completed === 0} />
+        ) : null}
+      </div>
+
       <Card>
-        <CardContent className="pt-6">
-          {reminders.length === 0 ? (
-            <EmptyState
-              icon={<CalendarClock className="h-6 w-6" />}
-              title="No reminders"
-              description="Key dates across your portfolio will show here as they approach."
-            />
-          ) : (
-            <ul className="divide-y divide-border">
-              {reminders.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{d.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {d.property?.addressLine1 ?? "Portfolio"} ·{" "}
-                      {formatDate(d.dueDate)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge tone="info">
-                      {ImportantDateKindLabel[
-                        d.kind as keyof typeof ImportantDateKindLabel
-                      ] ?? d.kind}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {relativeDays(d.dueDate)}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+        <CardContent className="p-4 sm:p-5">
+          <RemindersTable reminders={screen.reminders} tab={screen.tab} />
         </CardContent>
       </Card>
     </div>
