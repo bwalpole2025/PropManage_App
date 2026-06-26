@@ -1,89 +1,119 @@
-import { Users2, Building2 } from "lucide-react";
+import { Users2, Briefcase, Building2 } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
-import { listOwnership } from "@/services/ownership";
+import { can, Capability } from "@/lib/auth/rbac";
+import { getOwnershipScreen } from "@/services/ownership";
 import { PageHeader } from "@/components/shared/page-header";
 import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { EmptyState } from "@/components/shared/empty-state";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { BeneficialOwnerTypeLabel } from "@/lib/enums";
+import { MetricCard } from "@/components/properties/metric-card";
+import { AddPortfolioDialog } from "@/components/properties/add-portfolio-dialog";
+import { OwnershipTabs } from "@/components/ownership/ownership-tabs";
+import { OwnershipFilterBar } from "@/components/ownership/ownership-filter-bar";
+import { AddBeneficialOwnerDialog } from "@/components/ownership/add-beneficial-owner-dialog";
+import { AddCompanyDialog } from "@/components/ownership/add-company-dialog";
+import { AssignOwnershipDialog } from "@/components/ownership/assign-ownership-dialog";
+import { PortfolioCard } from "@/components/ownership/portfolio-card";
+import { BeneficialOwnersTable } from "@/components/ownership/beneficial-owners-table";
+import { CompaniesTable } from "@/components/ownership/companies-table";
 
-function formatPercent(bp: number): string {
-  const pct = bp / 100;
-  return `${Number.isInteger(pct) ? pct : pct.toFixed(2)}%`;
-}
-
-export default async function OwnershipPage() {
+export default async function OwnershipPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const tab = sp.tab ?? "portfolios";
   const ctx = await getActiveContext();
-  const owners = await listOwnership(ctx.entityId);
+  const canManage = can(ctx.role, Capability.MANAGE_PROPERTIES);
+
+  const data = await getOwnershipScreen(ctx.entityId, {
+    property: sp.property,
+    owner: sp.owner,
+    sort: sp.sort,
+  });
+
+  const portfolioOptions = data.portfolios.map((p) => ({ id: p.id, name: p.name }));
+  const companyOptions = data.companies.map((c) => ({ id: c.id, name: c.name }));
 
   return (
     <div className="space-y-6">
       <SectionCoachmark section="ownership" />
       <PageHeader
         title="Ownership"
-        description="Beneficial owners and their share of each property — the basis for tax splits."
+        description="Model who owns what — portfolios, beneficial owners and companies — so tax is split pro-rata."
+        actions={
+          canManage ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <AddPortfolioDialog />
+              <AddBeneficialOwnerDialog
+                portfolios={portfolioOptions}
+                companies={companyOptions}
+              />
+              <AddCompanyDialog />
+            </div>
+          ) : null
+        }
       />
 
-      {owners.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <MetricCard label="Portfolios" value={data.summary.portfolioCount} />
+        <MetricCard label="Beneficial owners" value={data.summary.ownerCount} />
+        <MetricCard label="Companies" value={data.summary.companyCount} />
+      </div>
+
+      <OwnershipTabs active={tab} />
+      <OwnershipFilterBar
+        properties={data.filterOptions.properties}
+        owners={data.filterOptions.owners}
+      />
+
+      {tab === "owners" ? (
+        <div className="space-y-4">
+          {canManage ? (
+            <div className="flex justify-end">
+              <AssignOwnershipDialog
+                owners={data.filterOptions.owners}
+                properties={data.filterOptions.properties}
+                portfolios={portfolioOptions}
+              />
+            </div>
+          ) : null}
+          {data.owners.length === 0 ? (
             <EmptyState
-              icon={<Users2 className="h-6 w-6" />}
+              icon={<Users2 className="h-5 w-5" />}
               title="No beneficial owners"
-              description="Add owners to record who holds each property and their percentage."
+              description="Add an owner to record who holds each property and their percentage share."
             />
-          </CardContent>
-        </Card>
+          ) : (
+            <BeneficialOwnersTable
+              owners={data.owners}
+              properties={data.filterOptions.properties}
+              portfolios={portfolioOptions}
+              ownerOptions={data.filterOptions.owners}
+              canManage={canManage}
+            />
+          )}
+        </div>
+      ) : tab === "companies" ? (
+        data.companies.length === 0 ? (
+          <EmptyState
+            icon={<Building2 className="h-5 w-5" />}
+            title="No companies"
+            description="Add a limited company to back a business portfolio."
+          />
+        ) : (
+          <CompaniesTable companies={data.companies} />
+        )
+      ) : data.portfolios.length === 0 ? (
+        <EmptyState
+          icon={<Briefcase className="h-5 w-5" />}
+          title="No portfolios"
+          description="Add a portfolio to group properties as personal or business."
+        />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {owners.map((o) => (
-            <Card key={o.id}>
-              <CardHeader className="flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Users2 className="h-4 w-4" />
-                  </span>
-                  {o.legalName}
-                </CardTitle>
-                <Badge tone="neutral">
-                  {BeneficialOwnerTypeLabel[
-                    o.type as keyof typeof BeneficialOwnerTypeLabel
-                  ] ?? o.type}
-                </Badge>
-              </CardHeader>
-              <CardContent>
-                {o.ownerships.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No property holdings recorded.
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {o.ownerships.map((ow) => (
-                      <li
-                        key={ow.id}
-                        className="flex items-center justify-between py-2 text-sm"
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="truncate">
-                            {ow.property.addressLine1}
-                          </span>
-                        </span>
-                        <span className="font-medium">
-                          {formatPercent(ow.ownershipPercentageBp)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {data.portfolios.map((p) => (
+            <PortfolioCard key={p.id} portfolio={p} />
           ))}
         </div>
       )}

@@ -3,6 +3,7 @@ import { taxYearEndDate, taxYearLabelFor, taxYearStartDate } from "@/lib/format"
 import { TxnStatus } from "@/lib/enums";
 import { isSa105Category } from "@/lib/sa105";
 import type { TxnForEstimate } from "@/lib/tax";
+import type { ApportionTxn } from "@/lib/ownership";
 
 /** Entity record (incl. type) — used to branch tax treatment. */
 export async function getEntity(entityId: string) {
@@ -50,6 +51,36 @@ export async function getTaxYearTxns(
       direction: r.direction as TxnForEstimate["direction"],
       amountPence: r.amountPence,
       category: r.category as TxnForEstimate["category"],
+    }));
+}
+
+/**
+ * As `getTaxYearTxns`, but also carries `propertyId` so transactions can be
+ * apportioned to beneficial owners for per-owner tax statements. Kept separate
+ * so the account-level callers (dashboard, tax page, tRPC) are unaffected.
+ */
+export async function getTaxYearTxnsWithProperty(
+  entityId: string,
+  taxYearLabel: string,
+): Promise<ApportionTxn[]> {
+  const start = taxYearStartDate(taxYearLabel);
+  const end = taxYearEndDate(taxYearLabel);
+  const rows = await prisma.transaction.findMany({
+    where: {
+      accountId: entityId,
+      date: { gte: start, lte: end },
+      status: { not: TxnStatus.EXCLUDED },
+      category: { not: null },
+    },
+    select: { propertyId: true, direction: true, amountPence: true, category: true },
+  });
+  return rows
+    .filter((r) => isSa105Category(r.category))
+    .map((r) => ({
+      propertyId: r.propertyId,
+      direction: r.direction as ApportionTxn["direction"],
+      amountPence: r.amountPence,
+      category: r.category as ApportionTxn["category"],
     }));
 }
 

@@ -4,7 +4,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Select, Label } from "@/components/ui/input";
 import { TaxBandLabel, type TaxBand } from "@/lib/tax";
 
-export function TaxControls({ years }: { years: string[] }) {
+export function TaxControls({
+  years,
+  owners = [],
+}: {
+  years: string[];
+  owners?: { id: string; legalName: string }[];
+}) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -61,6 +67,24 @@ export function TaxControls({ years }: { years: string[] }) {
           <option value="1">£1,000 property allowance</option>
         </Select>
       </div>
+      {owners.length > 0 ? (
+        <div>
+          <Label htmlFor="owner">Beneficial owner</Label>
+          <Select
+            id="owner"
+            className="h-9 w-auto"
+            value={params.get("owner") ?? ""}
+            onChange={(e) => update("owner", e.target.value)}
+          >
+            <option value="">All owners</option>
+            {owners.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.legalName}
+              </option>
+            ))}
+          </Select>
+        </div>
+      ) : null}
     </div>
   );
 }

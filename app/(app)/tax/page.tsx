@@ -1,6 +1,8 @@
-import { Calculator, TrendingUp, TrendingDown, Receipt } from "lucide-react";
+import Link from "next/link";
+import { Calculator, TrendingUp, TrendingDown, Receipt, Users2 } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { getTaxEstimate } from "@/services/tax";
+import { getOwnerTaxEstimates } from "@/services/owner-tax";
 import { PageHeader } from "@/components/shared/page-header";
 import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { StatTile } from "@/components/shared/stat-tile";
@@ -36,11 +38,25 @@ export default async function TaxPage({
 }) {
   const sp = await searchParams;
   const ctx = await getActiveContext();
+  const opts = {
+    usePropertyAllowance: sp.allowance === "1",
+    taxBand: (sp.band as TaxBand) || undefined,
+  };
   const { estimate, entity, taxYear, availableYears, txnCount } =
-    await getTaxEstimate(ctx.entityId, sp.ty, {
-      usePropertyAllowance: sp.allowance === "1",
-      taxBand: (sp.band as TaxBand) || undefined,
-    });
+    await getTaxEstimate(ctx.entityId, sp.ty, opts);
+
+  // Per-owner pro-rata statements (income/expenses split by ownership %).
+  const ownerTax = await getOwnerTaxEstimates(ctx.entityId, sp.ty, opts);
+  const ownersWithHoldings = ownerTax.owners.filter(
+    (o) => o.ownedPropertyCount > 0,
+  );
+  const ownerOptions = ownersWithHoldings.map((o) => ({
+    id: o.owner.id,
+    legalName: o.owner.legalName,
+  }));
+  const shownOwners = sp.owner
+    ? ownersWithHoldings.filter((o) => o.owner.id === sp.owner)
+    : ownersWithHoldings;
 
   const rows = BOX_ORDER.filter(
     (b) => (estimate.boxBreakdown[b] ?? 0) !== 0,
@@ -58,7 +74,7 @@ export default async function TaxPage({
 
       <DisclaimerBanner />
 
-      <TaxControls years={availableYears} />
+      <TaxControls years={availableYears} owners={ownerOptions} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
@@ -176,6 +192,76 @@ export default async function TaxPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <div>
+            <CardTitle>Per-owner tax (pro-rata)</CardTitle>
+            <CardDescription>
+              Income and expenses split by each beneficial owner&apos;s ownership
+              share
+            </CardDescription>
+          </div>
+          <Users2 className="h-5 w-5 text-primary" />
+        </CardHeader>
+        <CardContent className="p-0">
+          {shownOwners.length === 0 ? (
+            <p className="p-5 text-sm text-muted-foreground">
+              No beneficial owners with property shares yet. Assign ownership on
+              the{" "}
+              <Link href="/ownership" className="font-medium text-primary hover:underline">
+                Ownership
+              </Link>{" "}
+              screen to see each owner&apos;s split.
+            </p>
+          ) : (
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Owner</TH>
+                  <TH className="text-right">Properties</TH>
+                  <TH className="text-right">Taxable income</TH>
+                  <TH className="text-right">Allowable expenses</TH>
+                  <TH className="text-right">Taxable profit</TH>
+                  <TH className="text-right">Est. tax</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {shownOwners.map((o) => (
+                  <TR key={o.owner.id}>
+                    <TD className="font-medium">{o.owner.legalName}</TD>
+                    <TD className="text-right tabular-nums">
+                      {o.ownedPropertyCount}
+                    </TD>
+                    <TD className="text-right">
+                      <CurrencyValue pence={o.estimate.totalIncomePence} />
+                    </TD>
+                    <TD className="text-right">
+                      <CurrencyValue
+                        pence={o.estimate.totalAllowableExpensesPence}
+                      />
+                    </TD>
+                    <TD className="text-right">
+                      <CurrencyValue pence={o.estimate.taxableProfitPence} />
+                    </TD>
+                    <TD className="text-right font-semibold">
+                      <CurrencyValue pence={o.estimate.estimatedTaxPence} />
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </CardContent>
+        <CardContent className="border-t border-border pt-3">
+          <p className="text-xs text-muted-foreground">
+            Each owner&apos;s £1,000 property allowance and finance-cost relief are
+            applied individually, so per-owner figures may not sum exactly to the
+            account total above. Untracked transactions (no property) aren&apos;t
+            split between owners.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
