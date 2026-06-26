@@ -9,7 +9,6 @@ import {
   ACTIVE_ENTITY_COOKIE,
 } from "@/lib/auth/active-org";
 import { can, Capability } from "@/lib/auth/rbac";
-import { recordAudit, AuditAction } from "@/lib/audit";
 
 export interface PrivacyState {
   error?: string;
