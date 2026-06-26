@@ -8,7 +8,9 @@ import {
   LandlordType,
   MembershipRole,
   MembershipStatus,
+  SubscriptionStatus,
 } from "@/lib/enums";
+import { trialEndDateFromNow } from "@/lib/subscription";
 import { ACTIVE_ENTITY_COOKIE, requireUser } from "@/lib/auth/active-org";
 
 const schema = z.object({
@@ -34,6 +36,9 @@ export async function createEntityAction(formData: FormData) {
       displayName: parsed.data.displayName,
       type: parsed.data.type,
       principalUserId: user.id,
+      // New accounts start a 30-day free trial.
+      subscriptionStatus: SubscriptionStatus.TRIALING,
+      trialEndsAt: trialEndDateFromNow(),
       // Every account gets a default 'Personal — Default' portfolio.
       portfolios: {
         create: { name: "Personal — Default", type: "personal", isDefault: true },

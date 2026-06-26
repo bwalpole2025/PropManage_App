@@ -197,3 +197,41 @@ export interface DocumentStorage {
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
 }
+
+// ---------------------------------------------------------------------------
+// 5. PaymentService — card billing via a provider-HOSTED checkout (Stripe-style)
+// ---------------------------------------------------------------------------
+// We NEVER receive or store raw card data: the provider's hosted fields /
+// checkout page collect it. We only ever see a session id + display-only summary.
+
+export interface PaymentCheckoutSession {
+  sessionId: string;
+  /** Provider-hosted URL where the customer securely enters their card. */
+  checkoutUrl: string;
+}
+
+export interface PaymentMethodSummary {
+  customerId: string;
+  brand: string; // display-only, returned by the provider (e.g. "Visa")
+  last4: string;
+}
+
+export interface PaymentService {
+  readonly providerName: string;
+
+  createCheckoutSession(input: {
+    entityId: EntityId;
+    pricePence: Pence;
+    interval: string;
+    trialEndsAt?: Iso | null;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<PaymentCheckoutSession>;
+
+  confirmCheckout(input: {
+    entityId: EntityId;
+    sessionId: string;
+  }): Promise<PaymentMethodSummary>;
+
+  cancelSubscription(input: { entityId: EntityId }): Promise<void>;
+}
