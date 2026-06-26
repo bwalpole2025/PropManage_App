@@ -22,19 +22,6 @@ import { PortfolioType, PortfolioTypeLabel } from "@/lib/enums";
 
 export function AddPortfolioDialog() {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
-  const [state, action, pending] = useActionState<AddPortfolioState, FormData>(
-    createPortfolioAction,
-    {},
-  );
-
-  useEffect(() => {
-    if (state.ok && open) {
-      setOpen(false);
-      router.refresh();
-    }
-  }, [state.ok, open, router]);
-
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
@@ -49,35 +36,70 @@ export function AddPortfolioDialog() {
               Group properties (e.g. personal vs a company).
             </DialogDescription>
           </DialogHeader>
-          <form action={action} className="space-y-4">
-            <div>
-              <Label htmlFor="portfolio-name">Name</Label>
-              <Input id="portfolio-name" name="name" required placeholder="e.g. Bristol portfolio" />
-            </div>
-            <div>
-              <Label htmlFor="portfolio-type">Type</Label>
-              <Select id="portfolio-type" name="type" defaultValue={PortfolioType.PERSONAL}>
-                {Object.values(PortfolioType).map((t) => (
-                  <option key={t} value={t}>
-                    {PortfolioTypeLabel[t]}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            {state.error ? (
-              <p className="text-sm text-danger">{state.error}</p>
-            ) : null}
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? "Adding…" : "Add portfolio"}
-              </Button>
-            </DialogFooter>
-          </form>
+          {/* Mounted only while open so useActionState resets on every reopen. */}
+          {open ? (
+            <AddPortfolioForm
+              onCancel={() => setOpen(false)}
+              onDone={() => setOpen(false)}
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function AddPortfolioForm({
+  onCancel,
+  onDone,
+}: {
+  onCancel: () => void;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [state, action, pending] = useActionState<AddPortfolioState, FormData>(
+    createPortfolioAction,
+    {},
+  );
+
+  useEffect(() => {
+    // Fresh-mounted per open, so state.ok flips undefined→true exactly once.
+    if (state.ok) {
+      onDone();
+      router.refresh();
+    }
+  }, [state.ok, onDone, router]);
+
+  return (
+    <form action={action} className="space-y-4">
+      <div>
+        <Label htmlFor="portfolio-name">Name</Label>
+        <Input
+          id="portfolio-name"
+          name="name"
+          required
+          placeholder="e.g. Bristol portfolio"
+        />
+      </div>
+      <div>
+        <Label htmlFor="portfolio-type">Type</Label>
+        <Select id="portfolio-type" name="type" defaultValue={PortfolioType.PERSONAL}>
+          {Object.values(PortfolioType).map((t) => (
+            <option key={t} value={t}>
+              {PortfolioTypeLabel[t]}
+            </option>
+          ))}
+        </Select>
+      </div>
+      {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={pending}>
+          {pending ? "Adding…" : "Add portfolio"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }

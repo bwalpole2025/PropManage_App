@@ -1,15 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ReceiptText } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { prisma } from "@/lib/db";
-import { EmptyState } from "@/components/shared/empty-state";
-import { CurrencyValue } from "@/components/shared/currency-value";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
-import { formatDate } from "@/lib/format";
-import { categoryLabel, isKnownCategory } from "@/lib/categories";
+import { PropertyTransactionsTable } from "@/components/properties/property-transactions-table";
 
 export default async function PropertyTransactionsPage({
   params,
@@ -20,7 +13,7 @@ export default async function PropertyTransactionsPage({
   const { entityId } = await getActiveContext();
 
   const property = await prisma.property.findFirst({
-    where: { id: propertyId, accountId: entityId },
+    where: { id: propertyId, accountId: entityId, archivedAt: undefined },
     select: { id: true },
   });
   if (!property) notFound();
@@ -45,55 +38,7 @@ export default async function PropertyTransactionsPage({
         </Link>
       </div>
 
-      {transactions.length === 0 ? (
-        <EmptyState
-          icon={<ReceiptText className="h-5 w-5" />}
-          title="No transactions"
-          description="Rent and expenses linked to this property will appear here."
-        />
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <THead>
-                <TR>
-                  <TH>Date</TH>
-                  <TH>Description</TH>
-                  <TH>Category</TH>
-                  <TH className="text-right">Amount</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {transactions.map((t) => (
-                  <TR key={t.id}>
-                    <TD className="whitespace-nowrap text-muted-foreground">
-                      {formatDate(t.date)}
-                    </TD>
-                    <TD className="font-medium">{t.description}</TD>
-                    <TD>
-                      {isKnownCategory(t.category) ? (
-                        <Badge tone="neutral">{categoryLabel(t.category)}</Badge>
-                      ) : (
-                        <Badge tone="warning">Uncategorised</Badge>
-                      )}
-                    </TD>
-                    <TD className="text-right">
-                      <CurrencyValue
-                        pence={
-                          t.direction === "EXPENSE" ? -t.amountPence : t.amountPence
-                        }
-                        tone="auto"
-                        signed
-                        className="font-semibold"
-                      />
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+      <PropertyTransactionsTable transactions={transactions} />
     </div>
   );
 }

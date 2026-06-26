@@ -1,5 +1,6 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -16,9 +17,35 @@ import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
 import { getDefaultPortfolio } from "@/services/shared";
 import {
+  cameraPositionSchema,
   propertyCreateSchema,
+  propertyUpdateSchema,
   type PropertyCreateInput,
 } from "@/schemas/property";
+
+// `at` is a fresh per-success discriminator so always-mounted forms (e.g. the
+// notes form) can re-fire their post-success effect on a second submit — a
+// sticky `ok: true` wouldn't change between two successes.
+export type PropertyActionState = { ok?: boolean; error?: string; at?: number };
+
+/** Revalidate the property's pages + the lists that include it. */
+function revalidateProperty(propertyId: string) {
+  revalidatePath("/properties");
+  revalidatePath(`/properties/${propertyId}`);
+  revalidatePath("/dashboard");
+}
+
+/**
+ * Find a property by id within the account, INCLUDING archived rows (the
+ * soft-delete escape hatch) — needed so restore/update can target an archived
+ * property. Returns the minimal selection or null.
+ */
+async function findOwnedProperty(entityId: string, propertyId: string) {
+  return prisma.property.findFirst({
+    where: { id: propertyId, accountId: entityId, archivedAt: undefined },
+    select: { id: true, currentValuePence: true },
+  });
+}
 
 /**
  * Shared create logic — called by BOTH the server action below and the tRPC
@@ -153,4 +180,225 @@ export async function addComplianceDocAction(formData: FormData) {
   revalidatePath(`/properties/${d.propertyId}`);
   revalidatePath("/files");
   revalidatePath("/dashboard");
+}
+
+// ---------------------------------------------------------------------------
+// Archive / restore — soft-delete. Archiving removes the property from active
+// lists but preserves its transactions/history (which are account-scoped, not
+// cascade-deleted). `update` is not soft-delete-guarded, so restore works.
+// ---------------------------------------------------------------------------
+
+export async function archivePropertyAction(propertyId: string) {
+  const { entityId } = await getActiveContext();
+  await requireEntityAccess(entityId, Capability.MANAGE_PROPERTIES);
+
+  const property = await findOwnedProperty(entityId, propertyId);
+  if (!property) throw new Error("Property not found");
+
+  await prisma.property.update({
+    where: { id: propertyId },
+    data: { archivedAt: new Date() },
+  });
+
+  revalidateProperty(propertyId);
+  redirect("/properties");
+}
+
+export async function restorePropertyAction(propertyId: string) {
+  const { entityId } = await getActiveContext();
+  await requireEntityAccess(entityId, Capability.MANAGE_PROPERTIES);
+
+  const property = await findOwnedProperty(entityId, propertyId);
+  if (!property) throw new Error("Property not found");
+
+  await prisma.property.update({
+    where: { id: propertyId },
+    data: { archivedAt: null },
+  });
+
+  revalidateProperty(propertyId);
+}
+
+// ---------------------------------------------------------------------------
+// Edit information — value, purchase, rental, EPC and the (IDOR-guarded)
+// portfolio. Empty form fields mean "leave unchanged". Editing the current
+// value also records a Valuation so the header + history stay consistent.
+// ---------------------------------------------------------------------------
+
+const EPC_RATINGS = new Set(["A", "B", "C", "D", "E", "F", "G"]);
+
+export async function updatePropertyAction(
+  propertyId: string,
+  _prev: PropertyActionState,
+  formData: FormData,
+): Promise<PropertyActionState> {
+  try {
+    const { entityId } = await getActiveContext();
+    await requireEntityAccess(entityId, Capability.MANAGE_PROPERTIES);
+
+    const property = await findOwnedProperty(entityId, propertyId);
+    if (!property) return { error: "Property not found" };
+
+    const parsed = propertyUpdateSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    }
+    const d = parsed.data;
+
+    // IDOR guard: the target portfolio must belong to this account.
+    if (d.portfolioId) {
+      const pf = await prisma.portfolio.findFirst({
+        where: { id: d.portfolioId, accountId: entityId },
+        select: { id: true },
+      });
+      if (!pf) return { error: "Portfolio not found" };
+    }
+
+    // Blank → leave unchanged; non-numeric → reject (don't silently store 0,
+    // which poundsToPence would otherwise return for NaN).
+    const money = (label: string, v?: string): number | undefined => {
+      if (!v || !v.trim()) return undefined;
+      const cleaned = v.replace(/[£,\s]/g, "").trim();
+      if (!/^\d+(\.\d+)?$/.test(cleaned)) {
+        throw new Error(`${label} must be a number`);
+      }
+      return poundsToPence(cleaned);
+    };
+    const data: Prisma.PropertyUpdateInput = {};
+
+    const currentValue = money("Current value", d.currentValue);
+    if (currentValue !== undefined) {
+      data.currentValuePence = currentValue;
+      // Record a valuation snapshot when the figure actually changes (and is a
+      // real positive figure), so the header's "latest valuation" and the
+      // Valuations history agree — never a £0 snapshot.
+      if (currentValue > 0 && currentValue !== property.currentValuePence) {
+        data.valuations = {
+          create: {
+            accountId: entityId,
+            amountPence: currentValue,
+            date: new Date(),
+            source: "MANUAL",
+          },
+        };
+      }
+    }
+
+    const purchasePrice = money("Purchase price", d.purchasePrice);
+    if (purchasePrice !== undefined) data.purchasePricePence = purchasePrice;
+    if (d.purchaseDate?.trim())
+      data.purchaseDate = new Date(d.purchaseDate);
+
+    const rentalIncome = money("Headline rent", d.rentalIncome);
+    if (rentalIncome !== undefined) data.rentalIncomeAmountPence = rentalIncome;
+    if (d.rentalIncomeFrequency)
+      data.rentalIncomeFrequency = d.rentalIncomeFrequency;
+
+    if (d.isFHL) data.isFHL = d.isFHL === "true";
+    if (d.furnished) data.furnished = d.furnished === "true";
+
+    // EPC fields: a present-but-empty value is an explicit clear (consistent
+    // across rating/score/expiry); an absent field leaves the value unchanged.
+    if (d.epcRating !== undefined)
+      data.epcRating = EPC_RATINGS.has(d.epcRating) ? d.epcRating : null;
+    if (d.epcScore !== undefined) {
+      const t = d.epcScore.trim();
+      if (t === "") {
+        data.epcScore = null;
+      } else {
+        const score = Number.parseInt(t, 10);
+        if (Number.isNaN(score) || score < 1 || score > 100) {
+          return { error: "EPC score must be between 1 and 100" };
+        }
+        data.epcScore = score;
+      }
+    }
+    if (d.epcExpiryDate !== undefined)
+      data.epcExpiryDate = d.epcExpiryDate.trim()
+        ? new Date(d.epcExpiryDate)
+        : null;
+
+    if (d.portfolioId)
+      data.portfolio = { connect: { id: d.portfolioId } };
+
+    await prisma.property.update({ where: { id: propertyId }, data });
+
+    revalidateProperty(propertyId);
+    revalidatePath(`/properties/${propertyId}/mortgages`);
+    revalidatePath(`/properties/${propertyId}/epc`);
+    return { ok: true };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Street-view camera position (JSON) + free-text property notes.
+// ---------------------------------------------------------------------------
+
+export async function setPropertyCameraPositionAction(
+  propertyId: string,
+  _prev: PropertyActionState,
+  formData: FormData,
+): Promise<PropertyActionState> {
+  try {
+    const { entityId } = await getActiveContext();
+    await requireEntityAccess(entityId, Capability.MANAGE_PROPERTIES);
+
+    const property = await findOwnedProperty(entityId, propertyId);
+    if (!property) return { error: "Property not found" };
+
+    const parsed = cameraPositionSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Invalid position" };
+    }
+
+    await prisma.property.update({
+      where: { id: propertyId },
+      data: { streetViewCameraPosition: parsed.data },
+    });
+
+    revalidatePath(`/properties/${propertyId}`);
+    return { ok: true };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+const noteSchema = z.object({
+  description: z.string().trim().min(1, "Note can't be empty").max(2000),
+});
+
+export async function createPropertyNoteAction(
+  propertyId: string,
+  _prev: PropertyActionState,
+  formData: FormData,
+): Promise<PropertyActionState> {
+  try {
+    const { entityId } = await getActiveContext();
+    await requireEntityAccess(entityId, Capability.MANAGE_PROPERTIES);
+
+    const property = await findOwnedProperty(entityId, propertyId);
+    if (!property) return { error: "Property not found" };
+
+    const parsed = noteSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Invalid note" };
+    }
+
+    await prisma.note.create({
+      data: {
+        accountId: entityId,
+        propertyId,
+        description: parsed.data.description,
+      },
+    });
+
+    revalidatePath(`/properties/${propertyId}`);
+    // `at` is a fresh discriminator so the inline note form re-fires its
+    // clear+refresh effect on a second consecutive successful submit.
+    return { ok: true, at: Date.now() };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }

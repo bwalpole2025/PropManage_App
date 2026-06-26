@@ -16,8 +16,10 @@ export default async function PropertyLayout({
 }) {
   const { propertyId } = await params;
   const { entityId } = await getActiveContext();
+  // `archivedAt: undefined` is the soft-delete escape hatch — an archived
+  // property must still load its detail (for the archived banner + restore).
   const property = await prisma.property.findFirst({
-    where: { id: propertyId, accountId: entityId },
+    where: { id: propertyId, accountId: entityId, archivedAt: undefined },
   });
   if (!property) notFound();
 
@@ -42,11 +44,14 @@ export default async function PropertyLayout({
               .join(", ")}
           </p>
         </div>
-        <Badge tone="primary">
-          {PropertyTypeLabel[
-            property.propertyType as keyof typeof PropertyTypeLabel
-          ] ?? property.propertyType}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {property.archivedAt ? <Badge tone="warning">Archived</Badge> : null}
+          <Badge tone="primary">
+            {PropertyTypeLabel[
+              property.propertyType as keyof typeof PropertyTypeLabel
+            ] ?? property.propertyType}
+          </Badge>
+        </div>
       </div>
 
       <PropertyTabs propertyId={propertyId} />

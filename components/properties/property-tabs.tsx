@@ -4,21 +4,27 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+// The "Property Info" tab also owns the folded deep-link sub-routes (reached
+// via "Review all" links), so it stays highlighted while on any of them.
+const INFO_SUBROUTES = ["tenancies", "transactions", "compliance", "owners"];
+
 export function PropertyTabs({ propertyId }: { propertyId: string }) {
   const pathname = usePathname();
   const base = `/properties/${propertyId}`;
   const tabs = [
-    { href: base, label: "Overview" },
-    { href: `${base}/tenancies`, label: "Tenancies" },
-    { href: `${base}/transactions`, label: "Transactions" },
-    { href: `${base}/compliance`, label: "Compliance" },
-    { href: `${base}/owners`, label: "Owners" },
+    { href: base, label: "Property Info" },
+    { href: `${base}/mortgages`, label: "Mortgages & Valuations" },
+    { href: `${base}/epc`, label: "EPC" },
   ];
+
+  const infoActive =
+    pathname === base ||
+    INFO_SUBROUTES.some((s) => pathname === `${base}/${s}`);
 
   return (
     <div className="flex gap-1 overflow-x-auto border-b border-border">
       {tabs.map((t) => {
-        const active = pathname === t.href;
+        const active = t.href === base ? infoActive : pathname === t.href;
         return (
           <Link
             key={t.href}
