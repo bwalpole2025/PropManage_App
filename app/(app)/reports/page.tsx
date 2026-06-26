@@ -1,4 +1,5 @@
-import { FileSpreadsheet, PieChart, Building2 } from "lucide-react";
+import Link from "next/link";
+import { FileSpreadsheet, PieChart, Building2, FileText, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SectionCoachmark } from "@/components/shared/section-coachmark";
 import { ComingSoon } from "@/components/shared/coming-soon";
@@ -31,8 +32,26 @@ export default function ReportsPage() {
         description="Export-ready statements for you and your accountant."
       />
 
+      <Link href="/reports/tax-statement" className="block">
+        <Card className="transition-colors hover:border-primary/50">
+          <CardContent className="flex items-center gap-4 p-5">
+            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <FileText className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold">Tax Statement (SA105)</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Your tax forecast aligned to SA105 — income, expenses, the
+                finance-cost reducer and per-owner figures. Export to CSV.
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </CardContent>
+        </Card>
+      </Link>
+
       <ComingSoon
-        title="Reports are on the way"
+        title="More reports are on the way"
         description="The data model already captures everything these reports need — they'll plug straight into the existing services."
       >
         <div className="grid gap-4 sm:grid-cols-3">

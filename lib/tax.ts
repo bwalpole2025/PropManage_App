@@ -10,26 +10,23 @@ import {
   Sa105CategoryDirection,
 } from "./sa105";
 import { LandlordType, TxnDirection } from "./enums";
+import { getTaxYearConfig, type TaxBand } from "./tax-config";
 
-/** £1,000 property income allowance, in pence. */
-export const PROPERTY_ALLOWANCE_PENCE = 100_000;
+export type { TaxBand };
 
-export type TaxBand = "BASIC" | "HIGHER" | "ADDITIONAL";
-
-export const TaxBandRate: Record<TaxBand, number> = {
-  BASIC: 0.2,
-  HIGHER: 0.4,
-  ADDITIONAL: 0.45,
-};
+/**
+ * £1,000 property income allowance, in pence.
+ * @deprecated Read `getTaxYearConfig(taxYear).propertyAllowancePence` — kept for
+ * backwards-compatible imports.
+ */
+export const PROPERTY_ALLOWANCE_PENCE =
+  getTaxYearConfig("2025-26").propertyAllowancePence;
 
 export const TaxBandLabel: Record<TaxBand, string> = {
   BASIC: "Basic rate (20%)",
   HIGHER: "Higher rate (40%)",
   ADDITIONAL: "Additional rate (45%)",
 };
-
-/** Basic-rate restriction applied to residential finance costs. */
-const FINANCE_COST_RELIEF_RATE = 0.2;
 
 export const TAX_DISCLAIMER =
   "This is an automated estimate to help you plan. It is not tax advice and may " +
@@ -78,6 +75,7 @@ export function computeTaxEstimate(
   transactions: TxnForEstimate[],
   options: TaxEstimateOptions = {},
 ): TaxEstimateResult {
+  const cfg = getTaxYearConfig(taxYear);
   const landlordType = options.landlordType ?? LandlordType.INDIVIDUAL;
   const taxBand = options.taxBand ?? "BASIC";
   const isCompany = landlordType === LandlordType.LIMITED_COMPANY;
@@ -118,7 +116,7 @@ export function computeTaxEstimate(
 
   if (useAllowance) {
     // Property allowance replaces all actual expenses and finance-cost relief.
-    propertyAllowanceUsed = Math.min(PROPERTY_ALLOWANCE_PENCE, totalIncome);
+    propertyAllowanceUsed = Math.min(cfg.propertyAllowancePence, totalIncome);
     boxBreakdown[Sa105Box.PROPERTY_INCOME_ALLOW] = propertyAllowanceUsed;
     allowableExpenses = 0;
     taxableProfit = Math.max(0, totalIncome - propertyAllowanceUsed);
@@ -127,11 +125,13 @@ export function computeTaxEstimate(
     if (!isCompany && financeCosts > 0) {
       // Relief base capped at the lower of finance costs and taxable profit.
       const reliefBase = Math.min(financeCosts, taxableProfit);
-      financeCostTaxReduction = Math.round(reliefBase * FINANCE_COST_RELIEF_RATE);
+      financeCostTaxReduction = Math.round(reliefBase * cfg.financeCostReliefRate);
     }
   }
 
-  const grossTax = Math.round(taxableProfit * TaxBandRate[taxBand]);
+  // Limited companies pay corporation tax; individuals pay at their marginal band.
+  const rate = isCompany ? cfg.corporationTaxRate : cfg.incomeTaxBandRates[taxBand];
+  const grossTax = Math.round(taxableProfit * rate);
   const estimatedTax = Math.max(0, grossTax - financeCostTaxReduction);
 
   return {
