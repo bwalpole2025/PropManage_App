@@ -177,6 +177,7 @@ model Account {
   auditLogs        AuditLog[]
   notifications    Notification[]
   insurancePolicies InsurancePolicy[]
+  documentCustomCategories DocumentCustomCategory[]
 
   @@index([principalUserId])
 }
@@ -667,6 +668,22 @@ model Document {
 
   @@index([accountId])
   @@index([expiryDate])
+}
+
+// Account-defined document category (the Documents area "Custom categories" tab).
+// A Document references one by storing its id in `Document.category` (built-in
+// categories use the DocumentCategory enum string instead).
+model DocumentCustomCategory {
+  id        String   @id @default(cuid())
+  accountId String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, name])
+  @@index([accountId])
 }
 
 // Materialised per-offset (30/14/7/1) expiry reminder rows for a Document, fired

@@ -196,6 +196,7 @@ export type BankConnStatus =
 export const NotificationKind = {
   PAYMENT_RECEIVED: "PAYMENT_RECEIVED",
   RENT_OVERDUE: "RENT_OVERDUE",
+  COMPLIANCE_EXPIRY: "COMPLIANCE_EXPIRY",
 } as const;
 export type NotificationKind =
   (typeof NotificationKind)[keyof typeof NotificationKind];
@@ -203,6 +204,7 @@ export type NotificationKind =
 export const NotificationKindLabel: Record<NotificationKind, string> = {
   PAYMENT_RECEIVED: "Payment received",
   RENT_OVERDUE: "Rent overdue",
+  COMPLIANCE_EXPIRY: "Document expiring",
 };
 
 export const ComplianceType = {
@@ -230,48 +232,213 @@ export const ComplianceTypeLabel: Record<ComplianceType, string> = {
   OTHER: "Other Certificate",
 };
 
-// General document categories (compliance kinds folded in + non-compliance docs).
+// General document categories (compliance certs + insurance + tenancy +
+// financial + import + misc). DB column is a free String; values not listed here
+// are custom categories (DocumentCustomCategory id) — resolved via
+// `resolveDocumentCategoryLabel`. Existing keys are preserved so seeded data
+// keeps resolving; labels follow the Documents-area spec.
 export const DocumentCategory = {
+  // Compliance certificates
+  EICR: "EICR", // Electrical Safety Certificate
   EPC: "EPC",
-  GAS_SAFETY: "GAS_SAFETY",
-  EICR: "EICR",
-  PAT: "PAT",
-  LEGIONELLA: "LEGIONELLA",
   FIRE_ALARM: "FIRE_ALARM",
+  FIRE_SAFETY: "FIRE_SAFETY",
+  GAS_SAFETY: "GAS_SAFETY",
+  LICENCE_HMO: "LICENCE_HMO", // HMO License
+  LEGIONELLA: "LEGIONELLA",
+  PAT: "PAT",
+  // Insurance (sub-types + general)
+  INSURANCE_BUILDINGS: "INSURANCE_BUILDINGS",
+  INSURANCE_CONTENTS: "INSURANCE_CONTENTS",
+  INSURANCE_RENT_GUARANTEE: "INSURANCE_RENT_GUARANTEE",
+  INSURANCE_LANDLORD: "INSURANCE_LANDLORD",
+  INSURANCE_APPLIANCE: "INSURANCE_APPLIANCE",
+  INSURANCE_DEPOSIT: "INSURANCE_DEPOSIT",
+  INSURANCE_MORTGAGE_PROTECTION: "INSURANCE_MORTGAGE_PROTECTION",
   INSURANCE: "INSURANCE",
-  LICENCE_HMO: "LICENCE_HMO",
+  // Tenancy
   TENANCY_AGREEMENT: "TENANCY_AGREEMENT",
-  RECEIPT: "RECEIPT",
+  TENANT_REFERENCE: "TENANT_REFERENCE",
+  INVENTORY: "INVENTORY",
+  // Financial
+  MORTGAGE: "MORTGAGE",
+  LETTING_AGENT_STATEMENT: "LETTING_AGENT_STATEMENT",
   STATEMENT: "STATEMENT",
+  RECEIPT: "RECEIPT",
+  // Imports
+  IMPORT_CLIENT: "IMPORT_CLIENT",
+  IMPORT_PROPERTY: "IMPORT_PROPERTY",
+  IMPORT_TENANT: "IMPORT_TENANT",
+  IMPORT_TRANSACTIONS: "IMPORT_TRANSACTIONS",
+  // Misc
+  LOGO: "LOGO",
   OTHER: "OTHER",
 } as const;
 export type DocumentCategory =
   (typeof DocumentCategory)[keyof typeof DocumentCategory];
 export const DocumentCategoryLabel: Record<DocumentCategory, string> = {
-  EPC: "EPC (Energy Performance)",
-  GAS_SAFETY: "Gas Safety (CP12)",
-  EICR: "EICR (Electrical)",
-  PAT: "PAT Testing",
+  EICR: "Electrical Safety Certificate",
+  EPC: "EPC",
+  FIRE_ALARM: "Fire Alarm Certificate",
+  FIRE_SAFETY: "Fire Safety Certificate",
+  GAS_SAFETY: "Gas Safety Certificate",
+  LICENCE_HMO: "HMO License",
   LEGIONELLA: "Legionella Risk Assessment",
-  FIRE_ALARM: "Fire / Smoke Alarm",
-  INSURANCE: "Landlord Insurance",
-  LICENCE_HMO: "HMO Licence",
+  PAT: "PAT Test",
+  INSURANCE_BUILDINGS: "Insurance — Buildings",
+  INSURANCE_CONTENTS: "Insurance — Contents",
+  INSURANCE_RENT_GUARANTEE: "Insurance — Rent Guarantee",
+  INSURANCE_LANDLORD: "Insurance — Landlord",
+  INSURANCE_APPLIANCE: "Insurance — Appliance",
+  INSURANCE_DEPOSIT: "Insurance — Deposit",
+  INSURANCE_MORTGAGE_PROTECTION: "Insurance — Mortgage Protection",
+  INSURANCE: "Insurance (general)",
   TENANCY_AGREEMENT: "Tenancy Agreement",
-  RECEIPT: "Receipt",
+  TENANT_REFERENCE: "Tenant Reference",
+  INVENTORY: "Inventory",
+  MORTGAGE: "Mortgage",
+  LETTING_AGENT_STATEMENT: "Letting Agent Statement",
   STATEMENT: "Statement",
-  OTHER: "Other Document",
+  RECEIPT: "Receipt",
+  IMPORT_CLIENT: "Client Import",
+  IMPORT_PROPERTY: "Property Import",
+  IMPORT_TENANT: "Tenant Import",
+  IMPORT_TRANSACTIONS: "Transactions Import",
+  LOGO: "Logo",
+  OTHER: "Other",
 };
+
+/** Grouped categories for `<optgroup>` pickers, in display order. */
+export const DOCUMENT_CATEGORY_GROUPS: {
+  label: string;
+  categories: DocumentCategory[];
+}[] = [
+  {
+    label: "Compliance certificates",
+    categories: [
+      DocumentCategory.EICR,
+      DocumentCategory.EPC,
+      DocumentCategory.FIRE_ALARM,
+      DocumentCategory.FIRE_SAFETY,
+      DocumentCategory.GAS_SAFETY,
+      DocumentCategory.LICENCE_HMO,
+      DocumentCategory.LEGIONELLA,
+      DocumentCategory.PAT,
+    ],
+  },
+  {
+    label: "Insurance",
+    categories: [
+      DocumentCategory.INSURANCE_BUILDINGS,
+      DocumentCategory.INSURANCE_CONTENTS,
+      DocumentCategory.INSURANCE_RENT_GUARANTEE,
+      DocumentCategory.INSURANCE_LANDLORD,
+      DocumentCategory.INSURANCE_APPLIANCE,
+      DocumentCategory.INSURANCE_DEPOSIT,
+      DocumentCategory.INSURANCE_MORTGAGE_PROTECTION,
+      DocumentCategory.INSURANCE,
+    ],
+  },
+  {
+    label: "Tenancy",
+    categories: [
+      DocumentCategory.TENANCY_AGREEMENT,
+      DocumentCategory.TENANT_REFERENCE,
+      DocumentCategory.INVENTORY,
+    ],
+  },
+  {
+    label: "Financial",
+    categories: [
+      DocumentCategory.MORTGAGE,
+      DocumentCategory.LETTING_AGENT_STATEMENT,
+      DocumentCategory.STATEMENT,
+      DocumentCategory.RECEIPT,
+    ],
+  },
+  {
+    label: "Imports",
+    categories: [
+      DocumentCategory.IMPORT_CLIENT,
+      DocumentCategory.IMPORT_PROPERTY,
+      DocumentCategory.IMPORT_TENANT,
+      DocumentCategory.IMPORT_TRANSACTIONS,
+    ],
+  },
+  {
+    label: "Other",
+    categories: [DocumentCategory.LOGO, DocumentCategory.OTHER],
+  },
+];
+
+const BUILTIN_DOCUMENT_CATEGORIES = new Set<string>(
+  Object.values(DocumentCategory),
+);
+export function isBuiltinDocumentCategory(value: string): boolean {
+  return BUILTIN_DOCUMENT_CATEGORIES.has(value);
+}
+
+/**
+ * Human label for a stored `Document.category`. Built-ins use the label map;
+ * anything else is treated as a custom category id, resolved via `customNames`
+ * (id → name), falling back to the raw value.
+ */
+export function resolveDocumentCategoryLabel(
+  category: string,
+  customNames?: Record<string, string>,
+): string {
+  if (isBuiltinDocumentCategory(category)) {
+    return DocumentCategoryLabel[category as DocumentCategory];
+  }
+  return customNames?.[category] ?? "Custom category";
+}
+
 // Compliance certificates expire and drive reminders (subset of DocumentCategory).
 export const COMPLIANCE_CATEGORIES: DocumentCategory[] = [
-  DocumentCategory.EPC,
-  DocumentCategory.GAS_SAFETY,
   DocumentCategory.EICR,
-  DocumentCategory.PAT,
-  DocumentCategory.LEGIONELLA,
+  DocumentCategory.EPC,
   DocumentCategory.FIRE_ALARM,
-  DocumentCategory.INSURANCE,
+  DocumentCategory.FIRE_SAFETY,
+  DocumentCategory.GAS_SAFETY,
   DocumentCategory.LICENCE_HMO,
+  DocumentCategory.LEGIONELLA,
+  DocumentCategory.PAT,
+  DocumentCategory.INSURANCE_BUILDINGS,
+  DocumentCategory.INSURANCE_CONTENTS,
+  DocumentCategory.INSURANCE_RENT_GUARANTEE,
+  DocumentCategory.INSURANCE_LANDLORD,
+  DocumentCategory.INSURANCE_APPLIANCE,
+  DocumentCategory.INSURANCE_DEPOSIT,
+  DocumentCategory.INSURANCE_MORTGAGE_PROTECTION,
+  DocumentCategory.INSURANCE,
 ];
+
+/** Default reminder lead times (days before expiry) for an expiring document. */
+export const DEFAULT_REMINDER_OFFSETS_DAYS = [30, 14, 7, 1] as const;
+
+// Expiry-window filter options for the Documents area.
+export const ExpiryWindow = {
+  ANY: "any",
+  D14: "14",
+  D30: "30",
+  D90: "90",
+  D180: "180",
+} as const;
+export type ExpiryWindow = (typeof ExpiryWindow)[keyof typeof ExpiryWindow];
+export const ExpiryWindowLabel: Record<ExpiryWindow, string> = {
+  any: "Any expiry",
+  "14": "Within 2 weeks",
+  "30": "Within 1 month",
+  "90": "Within 3 months",
+  "180": "Within 6 months",
+};
+/** Days for each bounded window (ANY has no bound). */
+export const ExpiryWindowDays: Record<Exclude<ExpiryWindow, "any">, number> = {
+  "14": 14,
+  "30": 30,
+  "90": 90,
+  "180": 180,
+};
 
 // Internal materialised-reminder lifecycle (DocumentReminder scheduler).
 export const ReminderStatus = {
