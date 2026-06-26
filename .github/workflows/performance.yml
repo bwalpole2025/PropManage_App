@@ -1,0 +1,55 @@
+name: Performance budget
+
+# Soft performance budget (Lighthouse CI). Assertions are "warn" level — they
+# report against the budget in .lighthouserc.json without failing the PR, so the
+# main `ci` workflow stays the source of truth for pass/fail. Runs on PRs that
+# touch app code.
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "public/**"
+      - "tailwind.config.ts"
+      - ".lighthouserc.json"
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: propmanage
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/propmanage?schema=public"
+      AUTH_SECRET: "ci-only-insecure-secret-00000000000000000000000000000000"
+      NEXTAUTH_URL: "http://localhost:3000"
+      APP_URL: "http://localhost:3000"
+      SERVICE_MODE: "mock"
+      STORAGE_DRIVER: "mock"
+      QUEUE_DRIVER: "memory"
+      EMAIL_DRIVER: "mock"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npm run db:seed
+      - run: npm run build
+      - name: Lighthouse CI (soft budget)
+        run: npx --yes @lhci/cli@0.13.x autorun

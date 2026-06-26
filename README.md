@@ -77,6 +77,37 @@ Sign in as the landlord to see a populated dashboard, or as the accountant to se
 - **Service factories** select mock vs real via env: `SERVICE_MODE`, `BANK_FEED_PROVIDER`,
   `HMRC_MTD_MODE`, `STORAGE_DRIVER`, `QUEUE_DRIVER`, `EMAIL_DRIVER`. See `.env.example`.
 
+## Security, privacy & support
+
+- **Audit trail.** `lib/audit.ts` appends a best-effort `AuditLog` row for every
+  financial change and external (bank/HMRC) submission. View it under
+  **Settings → Activity log** (owner/manager/accountant only).
+- **GDPR.** **Settings → Privacy** exports a complete JSON copy of the account
+  (`/api/account/export`, secrets excluded) and offers name-confirmed account
+  erasure. Marketing consent is separate from operational alerts.
+- **Privacy-first cookies.** Only strictly-necessary cookies are set until the
+  user accepts optional ones (`components/shared/cookie-consent.tsx`); public
+  `/privacy` and `/cookies` policies.
+- **Help & feedback.** The floating button (every screen) opens how-to guides, a
+  live-tutorial booking link (`NEXT_PUBLIC_TUTORIAL_BOOKING_URL`) and a feedback
+  dialog routed to support.
+- See **`SECURITY.md`** for the full review checklist (tenant isolation, RBAC,
+  encryption at rest, provider token flows, audit, GDPR, cookies).
+
+## Accessibility, testing & delivery
+
+- **WCAG AA.** Skip-to-content link + focusable `<main>`, a base-layer
+  `:focus-visible` ring for keyboard users, `prefers-reduced-motion`, labelled
+  inputs, `aria-current` nav, and AA-contrast text. Storybook ships the a11y addon.
+- **Tests.** Vitest units (tax engine, **arrears detection**, report calcs) +
+  integration (feed import, **MTD sandbox**, audit). Playwright **E2E happy path**
+  (`e2e/core-flow.spec.ts`): add property → track transaction → dashboard →
+  generate report. Set `E2E_BASE_URL` to run against an already-running server.
+- **CI/CD.** `ci.yml` runs lint, typecheck, tests, build and the E2E path against
+  a Postgres service with migrations + seed. `preview.yml` deploys a secret-gated
+  Vercel preview per PR (`vercel.json`). `performance.yml` enforces a soft
+  Lighthouse budget (`.lighthouserc.json`).
+
 ## Project layout
 
 ```

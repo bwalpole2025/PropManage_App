@@ -1,0 +1,27 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "npm run start",
+      "url": [
+        "http://localhost:3000/login",
+        "http://localhost:3000/cookies"
+      ],
+      "numberOfRuns": 1,
+      "settings": { "preset": "desktop" }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["warn", { "minScore": 0.8 }],
+        "categories:accessibility": ["warn", { "minScore": 0.9 }],
+        "categories:best-practices": ["warn", { "minScore": 0.9 }],
+        "first-contentful-paint": ["warn", { "maxNumericValue": 2000 }],
+        "largest-contentful-paint": ["warn", { "maxNumericValue": 3000 }],
+        "total-blocking-time": ["warn", { "maxNumericValue": 400 }],
+        "cumulative-layout-shift": ["warn", { "maxNumericValue": 0.1 }],
+        "resource-summary:script:size": ["warn", { "maxNumericValue": 650000 }],
+        "resource-summary:total:size": ["warn", { "maxNumericValue": 1700000 }]
+      }
+    },
+    "upload": { "target": "temporary-public-storage" }
+  }
+}
