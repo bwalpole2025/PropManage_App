@@ -10,12 +10,14 @@
 import { MockBankFeedService } from "./mock/bankFeed";
 import { MockHmrcMtdService } from "./mock/hmrcMtd";
 import { MockDocumentStorage } from "./mock/documentStorage";
+import { MockPaymentService } from "./mock/payment";
 import { S3Storage } from "./real/documentStorage";
 import { DefaultTaxEstimationService } from "./taxEstimation";
 import type {
   BankFeedService,
   DocumentStorage,
   HmrcMtdService,
+  PaymentService,
   TaxEstimationService,
 } from "./types";
 
@@ -46,16 +48,23 @@ function makeStorage(): DocumentStorage {
   return new MockDocumentStorage();
 }
 
+function makePayments(): PaymentService {
+  // Real provider (e.g. Stripe) plugs in here behind the same interface.
+  return new MockPaymentService();
+}
+
 export const services: {
   bankFeed: BankFeedService;
   hmrc: HmrcMtdService;
   tax: TaxEstimationService;
   storage: DocumentStorage;
+  payments: PaymentService;
 } = {
   bankFeed: makeBankFeed(),
   hmrc: makeHmrc(),
   tax: new DefaultTaxEstimationService(),
   storage: makeStorage(),
+  payments: makePayments(),
 };
 
 export type {
@@ -65,4 +74,5 @@ export type {
   HmrcMtdProvider,
   TaxEstimationService,
   DocumentStorage,
+  PaymentService,
 } from "./types";

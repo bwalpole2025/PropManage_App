@@ -69,6 +69,42 @@ export interface BissDTO {
   taxableProfit: Pence;
 }
 
+/** An HMRC income source (business) the connected user reports under MTD ITSA. */
+export interface MtdIncomeSourceDTO {
+  businessId: string;
+  typeOfBusiness: "uk-property" | "foreign-property" | "self-employment";
+  tradingName?: string;
+  accountingType?: string;
+  commencementDate?: Iso;
+}
+
+/** HMRC's tax calculation for a tax year (acceptance-critical to display). */
+export interface MtdCalculationDTO {
+  calculationId: string;
+  taxYear: string;
+  status: "PENDING" | "READY" | "ERROR";
+  estimateOrCrystallised: "estimate" | "crystallised";
+  totalIncomePence?: Pence;
+  totalAllowancesAndDeductionsPence?: Pence;
+  totalTaxableIncomePence?: Pence;
+  incomeTaxAndNicsDuePence?: Pence;
+  messages?: { type: string; text: string }[];
+  metadataJson?: unknown;
+}
+
+/**
+ * Who is performing a (delegated) submission. An ACCOUNTANT membership submitting
+ * within the landlord's already-authorised connection sets onBehalfOf="agent" so
+ * the adapter can set agent fraud-prevention headers and the audit log records
+ * the real submitter — never used to cross account boundaries.
+ */
+export interface AgentContext {
+  submittedByUserId: string;
+  submittedByMembershipId: string;
+  onBehalfOf: "self" | "agent";
+  arn?: string;
+}
+
 // ---------------------------------------------------------------------------
 // 1. BankFeedService — open-banking aggregator (TrueLayer / Plaid style)
 // ---------------------------------------------------------------------------
@@ -118,33 +154,69 @@ export interface HmrcMtdService {
     state: string;
   }): string;
 
+  // Provider encrypts + persists the access/refresh tokens internally (it owns
+  // the MtdConnection row); raw tokens never cross this interface boundary.
   exchangeCode(input: {
     entityId: EntityId;
     code: string;
     redirectUri: string;
-  }): Promise<{ connectionId: string; expiresAt: Iso }>;
+  }): Promise<{ connectionId: string; expiresAt: Iso; hmrcUserId?: string }>;
+
+  /** List the connected user's income sources (businesses); yields the businessId. */
+  listIncomeSources(input: {
+    entityId: EntityId;
+    agentContext?: AgentContext;
+  }): Promise<MtdIncomeSourceDTO[]>;
 
   getObligations(input: {
     entityId: EntityId;
     taxYear: string;
     type?: ObligationType;
+    agentContext?: AgentContext;
   }): Promise<MtdObligationDTO[]>;
 
   submitQuarterlyUpdate(input: {
     entityId: EntityId;
     periodKey: string;
     summary: PropertyIncomeSummary;
+    agentContext?: AgentContext;
   }): Promise<{ submissionId: string; receiptId: string; status: SubmissionStatus }>;
+
+  /** Trigger HMRC's (async) tax calculation; returns the id to poll with getCalculation. */
+  triggerCalculation(input: {
+    entityId: EntityId;
+    taxYear: string;
+    calculationType?: "in-year" | "final-declaration";
+    agentContext?: AgentContext;
+  }): Promise<{ calculationId: string }>;
+
+  /** Fetch a calculation result; caller polls until status !== "PENDING". */
+  getCalculation(input: {
+    entityId: EntityId;
+    taxYear: string;
+    calculationId: string;
+    agentContext?: AgentContext;
+  }): Promise<MtdCalculationDTO>;
 
   getBusinessIncomeSourceSummary(input: {
     entityId: EntityId;
     taxYear: string;
   }): Promise<BissDTO>;
 
+  /** End-of-Period Statement: finalise a single business's figures for the year. */
+  submitEops(input: {
+    entityId: EntityId;
+    taxYear: string;
+    businessId: string;
+    agentContext?: AgentContext;
+  }): Promise<{ submissionId: string; receiptId: string; status: SubmissionStatus }>;
+
+  /** Final Declaration (crystallisation) of the whole return for a tax year. */
   submitFinalDeclaration(input: {
     entityId: EntityId;
     taxYear: string;
     calculationId: string;
+    agentContext?: AgentContext;
   }): Promise<{ submissionId: string; receiptId: string; status: SubmissionStatus }>;
 
   refreshTokens(entityId: EntityId): Promise<{ expiresAt: Iso }>;
@@ -172,6 +244,50 @@ export interface TaxEstimationService {
 
 export type BankFeedProvider = BankFeedService;
 export type HmrcMtdProvider = HmrcMtdService;
+
+// ---------------------------------------------------------------------------
+// 5. PaymentService — card billing via a provider-HOSTED checkout (Stripe-style)
+// ---------------------------------------------------------------------------
+// We NEVER receive or store raw card data: the provider's hosted fields /
+// checkout page collect it. We only ever see a session id + display-only summary.
+
+export interface PaymentCheckoutSession {
+  sessionId: string;
+  /** Provider-hosted URL where the customer securely enters their card. */
+  checkoutUrl: string;
+}
+
+export interface PaymentMethodSummary {
+  customerId: string;
+  brand: string; // display-only, returned by the provider (e.g. "Visa")
+  last4: string;
+}
+
+export interface PaymentService {
+  readonly providerName: string;
+
+  /**
+   * Start a provider-hosted subscription checkout. `trialEndsAt` schedules the
+   * first charge for the end of the trial. No card data passes through us.
+   */
+  createCheckoutSession(input: {
+    entityId: EntityId;
+    pricePence: Pence;
+    interval: string;
+    trialEndsAt?: Iso | null;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<PaymentCheckoutSession>;
+
+  /** Confirm a completed hosted checkout; returns display-only card details. */
+  confirmCheckout(input: {
+    entityId: EntityId;
+    sessionId: string;
+  }): Promise<PaymentMethodSummary>;
+
+  /** Cancel the customer's subscription with the provider. */
+  cancelSubscription(input: { entityId: EntityId }): Promise<void>;
+}
 
 // ---------------------------------------------------------------------------
 // 4. DocumentStorage — S3-compatible object storage for documents & receipts

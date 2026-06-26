@@ -196,7 +196,11 @@ export type BankConnStatus =
 export const NotificationKind = {
   PAYMENT_RECEIVED: "PAYMENT_RECEIVED",
   RENT_OVERDUE: "RENT_OVERDUE",
+  RENT_UPCOMING: "RENT_UPCOMING",
   COMPLIANCE_EXPIRY: "COMPLIANCE_EXPIRY",
+  MTD_DEADLINE: "MTD_DEADLINE",
+  BANK_CONSENT_EXPIRY: "BANK_CONSENT_EXPIRY",
+  REMINDER: "REMINDER",
 } as const;
 export type NotificationKind =
   (typeof NotificationKind)[keyof typeof NotificationKind];
@@ -204,7 +208,11 @@ export type NotificationKind =
 export const NotificationKindLabel: Record<NotificationKind, string> = {
   PAYMENT_RECEIVED: "Payment received",
   RENT_OVERDUE: "Rent overdue",
+  RENT_UPCOMING: "Rent due soon",
   COMPLIANCE_EXPIRY: "Document expiring",
+  MTD_DEADLINE: "MTD deadline approaching",
+  BANK_CONSENT_EXPIRY: "Bank connection expiring",
+  REMINDER: "Reminder",
 };
 
 export const ComplianceType = {

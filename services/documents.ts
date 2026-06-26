@@ -1,6 +1,5 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { parseNotificationPrefs } from "@/lib/notifications";
 import { daysUntil } from "@/lib/format";
 import {
   DocumentCategory,
@@ -80,17 +79,11 @@ export async function createDocument(
   const expiry = input.expiryDate ?? null;
   const offsets = [...DEFAULT_REMINDER_OFFSETS_DAYS];
 
-  let scheduleReminders = false;
-  if (expiry) {
-    const account = await prisma.account.findUnique({
-      where: { id: entityId },
-      select: { notificationPrefs: true },
-    });
-    scheduleReminders = parseNotificationPrefs(
-      account?.notificationPrefs,
-    ).complianceReminders;
-  }
-
+  // Always materialise the 30/14/7/1-day reminder rows when there's an expiry.
+  // Whether each one is actually *delivered* (and on which channels) is decided
+  // at fire time by the dispatcher against the account's current preferences —
+  // so toggling `complianceReminders` later takes effect retroactively, and a
+  // document created while reminders were off still nudges once they're on.
   return prisma.document.create({
     data: {
       accountId: entityId,
@@ -102,15 +95,14 @@ export async function createDocument(
       reference: input.reference || null,
       fileId: input.fileId || null,
       reminderOffsetsDays: expiry ? offsets : [],
-      reminders:
-        expiry && scheduleReminders
-          ? {
-              create: offsets.map((o) => ({
-                offsetDays: o,
-                fireOn: new Date(expiry.getTime() - o * DAY_MS),
-              })),
-            }
-          : undefined,
+      reminders: expiry
+        ? {
+            create: offsets.map((o) => ({
+              offsetDays: o,
+              fireOn: new Date(expiry.getTime() - o * DAY_MS),
+            })),
+          }
+        : undefined,
       userReminders: expiry
         ? {
             create: [

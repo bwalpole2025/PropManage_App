@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import { Calculator } from "lucide-react";
 import { getActiveContext } from "@/lib/auth/active-org";
 import { can, Capability } from "@/lib/auth/rbac";
+import { prisma } from "@/lib/db";
+import { premiumLocked } from "@/lib/subscription";
+import { PremiumGate } from "@/components/shared/premium-gate";
 import {
   listTaxStatementYears,
   getTaxStatement,
@@ -53,6 +56,14 @@ export default async function TaxStatementsPage({
   const sp = await searchParams;
   const ctx = await getActiveContext();
   const canRunTax = can(ctx.role, Capability.RUN_TAX);
+
+  // Premium gate: blur the figures behind an "UNLOCK YOUR DATA" overlay unless
+  // the account subscription is active.
+  const billing = await prisma.account.findUnique({
+    where: { id: ctx.entityId },
+    select: { subscriptionStatus: true },
+  });
+  const locked = premiumLocked(billing?.subscriptionStatus);
 
   const store = await cookies();
   const accepted = store.get(taxAckCookieName(ctx.entityId))?.value === "1";
@@ -123,15 +134,20 @@ export default async function TaxStatementsPage({
             />
           ) : null}
 
-          <TaxFigures
-            figures={toFigures(ownerRow ?? statement.account)}
-            heading={
-              ownerRow
-                ? `${ownerRow.beneficialOwner!.legalName} — pro-rata share`
-                : "Whole portfolio"
-            }
-            computedAt={statement.computedAt}
-          />
+          <PremiumGate
+            locked={locked}
+            description="Subscribe to view your estimated tax position."
+          >
+            <TaxFigures
+              figures={toFigures(ownerRow ?? statement.account)}
+              heading={
+                ownerRow
+                  ? `${ownerRow.beneficialOwner!.legalName} — pro-rata share`
+                  : "Whole portfolio"
+              }
+              computedAt={statement.computedAt}
+            />
+          </PremiumGate>
 
           {statement.owners.length > 0 ? (
             <p className="text-xs text-muted-foreground">

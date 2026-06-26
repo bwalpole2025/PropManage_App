@@ -4,12 +4,18 @@
 export type JobName =
   | "computeArrears"
   | "sendComplianceReminders"
+  | "sendRentReminders"
+  | "sendMtdReminders"
+  | "sendBankConsentWarnings"
   | "pollBankFeed";
 
 // entityId omitted ⇒ the handler sweeps all accounts.
 export interface JobPayloads {
   computeArrears: { entityId?: string };
   sendComplianceReminders: { entityId?: string };
+  sendRentReminders: { entityId?: string };
+  sendMtdReminders: { entityId?: string };
+  sendBankConsentWarnings: { entityId?: string };
   pollBankFeed: { entityId?: string };
 }
 

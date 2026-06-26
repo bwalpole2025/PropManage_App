@@ -1,9 +1,8 @@
 import { prisma } from "@/lib/db";
 import { NotificationKind, RentStatus, TenancyStatus } from "@/lib/enums";
 import { formatPence } from "@/lib/format";
-import { parseNotificationPrefs } from "@/lib/notifications";
-import { createForAccountUsers } from "@/lib/notifications/service";
-import { emailSender } from "@/lib/email";
+import { NotificationCategory } from "@/lib/notifications";
+import { dispatchNotification } from "@/lib/notifications/dispatch";
 import type { JobPayloads } from "../types";
 
 const DAY = 86_400_000;
@@ -65,16 +64,17 @@ export async function computeArrears(data: JobPayloads["computeArrears"]) {
           data: { shortfallPence: shortfall, daysOverdue },
         });
       } else {
-        await prisma.arrearsAlert.create({
+        const alert = await prisma.arrearsAlert.create({
           data: {
             tenancyId: e.tenancyId,
             rentScheduleEntryId: e.id,
             shortfallPence: shortfall,
             daysOverdue,
           },
+          select: { id: true },
         });
         opened++;
-        await notifyArrears(e.tenancy, shortfall, daysOverdue);
+        await notifyArrears(alert.id, e.tenancy, shortfall, daysOverdue);
       }
     } else if (e.receivedPence >= e.expectedPence && e.arrearsAlerts.length) {
       // Now paid — resolve any open alert.
@@ -98,6 +98,7 @@ export async function computeArrears(data: JobPayloads["computeArrears"]) {
 }
 
 async function notifyArrears(
+  alertId: string,
   tenancy: {
     property: { accountId: string; addressLine1: string };
     tenants: { name: string }[];
@@ -105,36 +106,18 @@ async function notifyArrears(
   shortfallPence: number,
   daysOverdue: number,
 ) {
-  const accountId = tenancy.property.accountId;
   const who = tenancy.tenants[0]?.name ?? "a tenant";
   const body = `${formatPence(shortfallPence)} overdue by ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} — ${who}, ${tenancy.property.addressLine1}.`;
 
-  await createForAccountUsers({
-    accountId,
+  // Fan out to every channel enabled for the rent & arrears category. The alert
+  // id is the dedup key, so re-running the sweep never re-notifies an open alert.
+  await dispatchNotification({
+    accountId: tenancy.property.accountId,
+    category: NotificationCategory.rentAndArrears,
     kind: NotificationKind.RENT_OVERDUE,
     title: "Rent overdue",
     body,
     href: "/transactions",
+    dedupKey: `arrears:${alertId}`,
   });
-
-  const account = await prisma.account.findUnique({
-    where: { id: accountId },
-    select: {
-      notificationPrefs: true,
-      principal: { select: { email: true, firstName: true } },
-    },
-  });
-  if (
-    account?.principal?.email &&
-    parseNotificationPrefs(account.notificationPrefs).rentAndArrears
-  ) {
-    await emailSender.sendOperationalAlert({
-      to: account.principal.email,
-      name: account.principal.firstName,
-      subject: "Rent overdue — PropManage",
-      heading: "Rent overdue",
-      body,
-      href: "/transactions",
-    });
-  }
 }
