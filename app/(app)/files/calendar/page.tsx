@@ -16,7 +16,7 @@ type AgendaItem = {
   date: Date;
   title: string;
   property: string;
-  tone: "info" | "warning";
+  tone: "info" | "warning" | "success";
   tag: string;
 };
 
@@ -27,9 +27,17 @@ const monthFmt = new Intl.DateTimeFormat("en-GB", {
 
 export default async function CalendarPage() {
   const ctx = await getActiveContext();
-  const { reminders, compliance } = await getFilesAndDates(ctx.entityId);
+  const { reminders, compliance, rentDue } = await getFilesAndDates(ctx.entityId);
 
   const items: AgendaItem[] = [
+    ...rentDue.map((e) => ({
+      id: `rent-${e.id}`,
+      date: new Date(e.dueDate),
+      title: `Rent due — ${e.tenancy.tenants[0]?.name ?? "Tenant"}`,
+      property: e.tenancy.property.addressLine1,
+      tone: "success" as const,
+      tag: "Rent due",
+    })),
     ...reminders.map((r) => ({
       id: `r-${r.id}`,
       date: new Date(r.dueDate),

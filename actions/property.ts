@@ -5,13 +5,22 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import {
+  createTenancyCore,
+  type CreateTenancyInput,
+} from "@/services/tenancy-write";
+import { revalidateTenancy } from "@/lib/tenancy-revalidate";
+import {
+  parseMoneyRequired,
+  parseMoneyOptional,
+  parseRentDueDay,
+} from "@/lib/tenancy-parse";
 import { poundsToPence } from "@/lib/format";
 import {
   DocumentCategory,
   DepositScheme,
   PropertyType,
   RentFrequency,
-  TenancyStatus,
 } from "@/lib/enums";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
@@ -93,11 +102,33 @@ const tenancySchema = z.object({
   rentFrequency: z.string(),
   rentDueDay: z.string().optional(),
   startDate: z.string().min(1),
+  endDate: z.string().optional(),
   tenantName: z.string().min(1, "Tenant name is required"),
   tenantEmail: z.string().optional(),
+  deposit: z.string().optional(),
   depositScheme: z.string().optional(),
 });
 
+function tenancyInputFromForm(
+  d: z.infer<typeof tenancySchema>,
+): CreateTenancyInput {
+  return {
+    propertyId: d.propertyId,
+    tenantName: d.tenantName,
+    tenantEmail: d.tenantEmail || null,
+    rentPence: parseMoneyRequired("Rent", d.rent),
+    rentFrequency: (d.rentFrequency as RentFrequency) || RentFrequency.MONTHLY,
+    rentDueDay: parseRentDueDay(d.rentDueDay) ?? null,
+    startDate: new Date(d.startDate),
+    endDate: d.endDate?.trim() ? new Date(d.endDate) : null,
+    depositPence: parseMoneyOptional("Deposit", d.deposit) ?? null,
+    depositScheme: (d.depositScheme as DepositScheme) || null,
+  };
+}
+
+export type TenancyActionState = { ok?: boolean; error?: string; at?: number };
+
+/** Throwing form action — kept for AddTenancyForm + property-detail callers. */
 export async function createTenancyAction(formData: FormData) {
   const { entityId } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_PROPERTIES);
@@ -106,35 +137,28 @@ export async function createTenancyAction(formData: FormData) {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid tenancy");
   }
-  const d = parsed.data;
+  await createTenancyCore(entityId, tenancyInputFromForm(parsed.data));
+  revalidateTenancy(parsed.data.propertyId);
+}
 
-  // Verify the property belongs to the active entity.
-  const property = await prisma.property.findFirst({
-    where: { id: d.propertyId, accountId: entityId },
-  });
-  if (!property) throw new Error("Property not found");
-
-  await prisma.tenancy.create({
-    data: {
-      propertyId: d.propertyId,
-      status: TenancyStatus.ACTIVE,
-      startDate: new Date(d.startDate),
-      rentPence: poundsToPence(d.rent),
-      rentFrequency: (d.rentFrequency as RentFrequency) ?? RentFrequency.MONTHLY,
-      rentDueDay: d.rentDueDay ? Number.parseInt(d.rentDueDay, 10) : null,
-      depositScheme: (d.depositScheme as DepositScheme) || null,
-      tenants: {
-        create: {
-          name: d.tenantName,
-          email: d.tenantEmail || null,
-          isLeadTenant: true,
-        },
-      },
-    },
-  });
-
-  revalidatePath(`/properties/${d.propertyId}`);
-  revalidatePath("/dashboard");
+/** `useActionState` variant for the Tenancies-screen dialog. */
+export async function createTenancyState(
+  _prev: TenancyActionState,
+  formData: FormData,
+): Promise<TenancyActionState> {
+  try {
+    const { entityId } = await getActiveContext();
+    await requireEntityAccess(entityId, Capability.MANAGE_PROPERTIES);
+    const parsed = tenancySchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Invalid tenancy" };
+    }
+    await createTenancyCore(entityId, tenancyInputFromForm(parsed.data));
+    revalidateTenancy(parsed.data.propertyId);
+    return { ok: true, at: Date.now() };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }
 
 const complianceSchema = z.object({
