@@ -3,9 +3,8 @@ import { NotificationKind, RentStatus, TenancyStatus } from "@/lib/enums";
 import { formatPence } from "@/lib/format";
 import { NotificationCategory } from "@/lib/notifications";
 import { dispatchNotification } from "@/lib/notifications/dispatch";
+import { evaluateArrears } from "@/lib/arrears";
 import type { JobPayloads } from "../types";
-
-const DAY = 86_400_000;
 
 /**
  * Detect rent arrears: rent-schedule periods past their due date that aren't
@@ -44,17 +43,15 @@ export async function computeArrears(data: JobPayloads["computeArrears"]) {
   let resolved = 0;
 
   for (const e of entries) {
-    const overdue = e.dueDate < now && e.receivedPence < e.expectedPence;
+    const a = evaluateArrears(e, now);
 
-    if (overdue) {
-      const shortfall = e.expectedPence - e.receivedPence;
-      const daysOverdue = Math.floor((now.getTime() - e.dueDate.getTime()) / DAY);
-      const status =
-        e.receivedPence > 0 ? RentStatus.PARTIAL : RentStatus.OVERDUE;
-      if (e.status !== status) {
+    if (a.overdue) {
+      const shortfall = a.shortfallPence;
+      const daysOverdue = a.daysOverdue;
+      if (e.status !== a.status) {
         await prisma.rentScheduleEntry.update({
           where: { id: e.id },
-          data: { status },
+          data: { status: a.status },
         });
       }
       const open = e.arrearsAlerts[0];
@@ -76,7 +73,7 @@ export async function computeArrears(data: JobPayloads["computeArrears"]) {
         opened++;
         await notifyArrears(alert.id, e.tenancy, shortfall, daysOverdue);
       }
-    } else if (e.receivedPence >= e.expectedPence && e.arrearsAlerts.length) {
+    } else if (a.fullyPaid && e.arrearsAlerts.length) {
       // Now paid — resolve any open alert.
       await prisma.arrearsAlert.updateMany({
         where: { rentScheduleEntryId: e.id, resolvedAt: null },
