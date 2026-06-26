@@ -18,6 +18,7 @@ import { encryptToken } from "@/lib/crypto";
 import { ingestBankConnection } from "@/lib/bank-ingest";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
+import { recordAudit, AuditAction } from "@/lib/audit";
 import type { TransactionFilters } from "@/services/transactions";
 
 const NINETY_DAYS = 90 * 86_400_000;
@@ -58,7 +59,7 @@ export async function completeBankLinkAction(input: {
   code: string;
   institutionName?: string;
 }): Promise<{ imported: number; connectionId: string }> {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
 
   const linked = await services.bankFeed.completeLink({
@@ -116,6 +117,18 @@ export async function completeBankLinkAction(input: {
 
   // Historical import — no per-payment notifications for the backfill.
   const { imported } = await ingestBankConnection(connection.id, { notify: false });
+  await recordAudit({
+    accountId: entityId,
+    actorUserId: user.id,
+    action: AuditAction.BANK_CONNECT,
+    targetType: "BankConnection",
+    targetId: connection.id,
+    metadata: {
+      provider: services.bankFeed.providerName,
+      institutionName: input.institutionName ?? null,
+      imported,
+    },
+  });
   revalidateTxn();
   revalidateBanking();
   return { imported, connectionId: connection.id };
@@ -197,7 +210,7 @@ async function ownedConnection(entityId: string, connectionId: string) {
 export async function reconnectBankConnectionAction(
   connectionId: string,
 ): Promise<{ imported: number }> {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
   const conn = await ownedConnection(entityId, connectionId);
 
@@ -213,6 +226,14 @@ export async function reconnectBankConnectionAction(
     },
   });
   const { imported } = await ingestBankConnection(conn.id, { notify: true });
+  await recordAudit({
+    accountId: entityId,
+    actorUserId: user.id,
+    action: AuditAction.BANK_RECONNECT,
+    targetType: "BankConnection",
+    targetId: conn.id,
+    metadata: { imported },
+  });
   revalidateTxn();
   revalidateBanking();
   return { imported };
@@ -222,7 +243,7 @@ export async function reconnectBankConnectionAction(
 export async function disconnectBankConnectionAction(
   connectionId: string,
 ): Promise<{ ok: boolean }> {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
   const conn = await ownedConnection(entityId, connectionId);
 
@@ -230,6 +251,13 @@ export async function disconnectBankConnectionAction(
   await prisma.bankConnection.update({
     where: { id: conn.id },
     data: { status: BankConnStatus.REVOKED },
+  });
+  await recordAudit({
+    accountId: entityId,
+    actorUserId: user.id,
+    action: AuditAction.BANK_DISCONNECT,
+    targetType: "BankConnection",
+    targetId: conn.id,
   });
   revalidateTxn();
   revalidateBanking();
@@ -282,7 +310,7 @@ export async function importTransactionsAction(
   _prev: ImportState,
   formData: FormData,
 ): Promise<ImportState> {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
 
   const file = formData.get("file");
@@ -355,6 +383,12 @@ export async function importTransactionsAction(
   }
   await prisma.transaction.createMany({ data: creates });
 
+  await recordAudit({
+    accountId: entityId,
+    actorUserId: user.id,
+    action: AuditAction.TRANSACTION_IMPORT,
+    metadata: { created: creates.length, skipped },
+  });
   revalidateTxn();
   return { created: creates.length, skipped };
 }

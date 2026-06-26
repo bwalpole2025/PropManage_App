@@ -12,6 +12,7 @@ import { allCategoryDirection, isKnownCategory, type AllCategory } from "@/lib/c
 import { matchRentPayment, unmatchRentPayment } from "@/lib/rent-matching";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
+import { recordAudit, AuditAction } from "@/lib/audit";
 
 const RENT = Sa105Category.RENT_INCOME;
 
@@ -56,7 +57,11 @@ async function assertTenancy(entityId: string, tenancyId: string) {
 }
 
 /** Shared create logic for both the full-page form and the inline dialog. */
-async function createTransactionFromForm(entityId: string, formData: FormData) {
+async function createTransactionFromForm(
+  entityId: string,
+  formData: FormData,
+  actorUserId: string,
+) {
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid transaction");
@@ -108,13 +113,26 @@ async function createTransactionFromForm(entityId: string, formData: FormData) {
     });
   }
 
+  await recordAudit({
+    accountId: entityId,
+    actorUserId,
+    action: AuditAction.TRANSACTION_CREATE,
+    targetType: "Transaction",
+    targetId: created.id,
+    metadata: {
+      category: created.category,
+      amountPence: created.amountPence,
+      propertyId: created.propertyId,
+    },
+  });
+
   revalidateAfterTxn(created.propertyId);
 }
 
 export async function createTransactionAction(formData: FormData) {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
-  await createTransactionFromForm(entityId, formData);
+  await createTransactionFromForm(entityId, formData, user.id);
   redirect("/transactions");
 }
 
@@ -128,10 +146,10 @@ export async function addTransactionAction(
   _prev: AddTransactionState,
   formData: FormData,
 ): Promise<AddTransactionState> {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
   try {
-    await createTransactionFromForm(entityId, formData);
+    await createTransactionFromForm(entityId, formData, user.id);
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -149,7 +167,7 @@ export async function categoriseTransactionAction(
   subcategory?: string | null,
   tenancyId?: string | null,
 ) {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
   if (!isKnownCategory(category)) throw new Error("Unknown category");
   if (tenancyId) await assertTenancy(entityId, tenancyId);
@@ -194,6 +212,15 @@ export async function categoriseTransactionAction(
     }
   });
 
+  await recordAudit({
+    accountId: entityId,
+    actorUserId: user.id,
+    action: AuditAction.TRANSACTION_CATEGORISE,
+    targetType: "Transaction",
+    targetId: transactionId,
+    metadata: { from: txn.category, to: category, subcategory: subcategory ?? null },
+  });
+
   revalidateAfterTxn(txn.propertyId);
 }
 
@@ -210,7 +237,7 @@ export async function updateTransactionAction(
   transactionId: string,
   patch: TxnPatch,
 ): Promise<{ ok: boolean }> {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
   if (patch.category != null && !isKnownCategory(patch.category)) {
     throw new Error("Unknown category");
@@ -278,6 +305,15 @@ export async function updateTransactionAction(
     }
   });
 
+  await recordAudit({
+    accountId: entityId,
+    actorUserId: user.id,
+    action: AuditAction.TRANSACTION_UPDATE,
+    targetType: "Transaction",
+    targetId: transactionId,
+    metadata: { patch },
+  });
+
   revalidateAfterTxn(propertyId ?? txn.propertyId);
   return { ok: true };
 }
@@ -299,7 +335,7 @@ export async function setTransactionNotesAction(
 
 /** Deactivate (exclude) a transaction from the books — reverses any rent match. */
 export async function excludeTransactionAction(transactionId: string) {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
   const txn = await prisma.transaction.findFirst({
     where: { id: transactionId, accountId: entityId },
@@ -314,12 +350,20 @@ export async function excludeTransactionAction(transactionId: string) {
       data: { status: TxnStatus.EXCLUDED },
     });
   });
+  await recordAudit({
+    accountId: entityId,
+    actorUserId: user.id,
+    action: AuditAction.TRANSACTION_EXCLUDE,
+    targetType: "Transaction",
+    targetId: transactionId,
+    metadata: { amountPence: txn.amountPence },
+  });
   revalidateAfterTxn(txn.propertyId);
 }
 
 /** Reactivate an excluded transaction — re-applies a rent match if applicable. */
 export async function restoreTransactionAction(transactionId: string) {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
   const txn = await prisma.transaction.findFirst({
     where: { id: transactionId, accountId: entityId },
@@ -347,6 +391,13 @@ export async function restoreTransactionAction(transactionId: string) {
         });
       }
     }
+  });
+  await recordAudit({
+    accountId: entityId,
+    actorUserId: user.id,
+    action: AuditAction.TRANSACTION_RESTORE,
+    targetType: "Transaction",
+    targetId: transactionId,
   });
   revalidateAfterTxn(txn.propertyId);
 }
@@ -386,7 +437,7 @@ export async function bulkRecategoriseTransactionsAction(
   category: string,
   subcategory?: string | null,
 ): Promise<{ count: number }> {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
   if (!isKnownCategory(category)) throw new Error("Unknown category");
   if (!ids.length) return { count: 0 };
@@ -417,6 +468,12 @@ export async function bulkRecategoriseTransactionsAction(
       }
     }
   });
+  await recordAudit({
+    accountId: entityId,
+    actorUserId: user.id,
+    action: AuditAction.TRANSACTION_BULK,
+    metadata: { op: "recategorise", count: txns.length, category },
+  });
   revalidateAfterTxn();
   return { count: txns.length };
 }
@@ -424,7 +481,7 @@ export async function bulkRecategoriseTransactionsAction(
 export async function bulkExcludeSelectedAction(
   ids: string[],
 ): Promise<{ count: number }> {
-  const { entityId } = await getActiveContext();
+  const { entityId, user } = await getActiveContext();
   await requireEntityAccess(entityId, Capability.MANAGE_TRANSACTIONS);
   if (!ids.length) return { count: 0 };
   const txns = await selectedTxns(entityId, ids);
@@ -436,6 +493,12 @@ export async function bulkExcludeSelectedAction(
         data: { status: TxnStatus.EXCLUDED },
       });
     }
+  });
+  await recordAudit({
+    accountId: entityId,
+    actorUserId: user.id,
+    action: AuditAction.TRANSACTION_BULK,
+    metadata: { op: "exclude", count: txns.length },
   });
   revalidateAfterTxn();
   return { count: txns.length };

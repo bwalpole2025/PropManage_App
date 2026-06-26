@@ -58,3 +58,19 @@ export function can(
 export function capabilitiesFor(role: MembershipRole | string): Capability[] {
   return POLICY[role as MembershipRole] ?? [];
 }
+
+/**
+ * Who may read the account's audit trail. The log records financial changes and
+ * external submissions across all members, so it is limited to the people who
+ * run the account (OWNER / MANAGER) plus the ACCOUNTANT who relies on it for
+ * compliance — not assistants or view-only members.
+ */
+export function canViewAuditLog(
+  role: MembershipRole | string | null | undefined,
+): boolean {
+  return (
+    role === MembershipRole.OWNER ||
+    role === MembershipRole.MANAGER ||
+    role === MembershipRole.ACCOUNTANT
+  );
+}
