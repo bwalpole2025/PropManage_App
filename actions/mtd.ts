@@ -16,9 +16,9 @@ import {
 } from "@/lib/enums";
 import { taxYearLabelFor } from "@/lib/format";
 import { mintState } from "@/lib/mtd/state";
+import { callbackUrlFromHeaders } from "@/lib/mtd/url";
 import { buildFraudHeaders, type FraudClientHints } from "@/lib/mtd/fraudHeaders";
 import {
-  MTD_REDIRECT_PATH,
   SUBMISSION_TYPE_EOPS,
   CalcStatus,
   CalcKind,
@@ -27,7 +27,6 @@ import {
   recordPendingSubmission,
   finalizeSubmission,
   recordError,
-  assertNotAlreadyAccepted,
 } from "@/lib/mtd/audit";
 import { compilePeriodSummary } from "@/services/mtd";
 import type { AgentContext } from "@/lib/services/types";
@@ -92,10 +91,7 @@ async function fraud(
 }
 
 async function absoluteCallbackUrl(): Promise<string> {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}${MTD_REDIRECT_PATH}`;
+  return callbackUrlFromHeaders(await headers());
 }
 
 // ---------------------------------------------------------------------------
@@ -197,12 +193,15 @@ export async function refreshObligationsAction(
       const sources = await services.hmrc.listIncomeSources({ entityId });
       const property =
         sources.find((s) => s.typeOfBusiness === "uk-property") ?? sources[0];
-      if (property) {
-        await prisma.mtdConnection.update({
-          where: { id: conn.id },
-          data: { businessIncomeSourceId: property.businessId },
-        });
+      if (!property) {
+        return {
+          error: "HMRC returned no property income source — check your MTD sign-up.",
+        };
       }
+      await prisma.mtdConnection.update({
+        where: { id: conn.id },
+        data: { businessIncomeSourceId: property.businessId },
+      });
     }
 
     const obligations = await services.hmrc.getObligations({ entityId, taxYear });
@@ -261,15 +260,6 @@ export async function submitQuarterlyUpdateAction(input: {
   const obl = obligations.find((o) => o.periodKey === input.periodKey);
   if (!obl) return { error: "That period is not a current obligation." };
 
-  await assertNotAlreadyAccepted({
-    mtdConnectionId: conn.id,
-    type: SubmissionType.QUARTERLY_UPDATE,
-    periodKey: input.periodKey,
-    taxYearLabel: taxYear,
-  }).catch((e) => {
-    throw e;
-  });
-
   const summary = await compilePeriodSummary({
     entityId,
     taxYear,
@@ -303,30 +293,32 @@ export async function submitQuarterlyUpdateAction(input: {
     submittedByMembershipId: who.membershipId,
   });
 
+  let result;
   try {
-    const result = await services.hmrc.submitQuarterlyUpdate({
+    result = await services.hmrc.submitQuarterlyUpdate({
       entityId,
       periodKey: input.periodKey,
       summary,
       agentContext: who.agentContext,
       fraudHeaders: await fraud(input.clientHints, conn.deviceId, who.agentContext),
     });
-    await finalizeSubmission(submissionId, {
-      hmrcReceiptId: result.receiptId,
-      receiptJson: json(result),
-      status: result.status,
-    });
-    await prisma.mtdObligation.update({
-      where: { id: obligationRow.id },
-      data: { status: ObligationStatus.FULFILLED },
-    });
-    revalidate();
-    return { ok: true, receiptId: result.receiptId, status: result.status };
   } catch (e) {
     await recordError(submissionId, { message: (e as Error).message });
     revalidate();
     return { error: (e as Error).message };
   }
+  // HMRC accepted — persist the receipt FIRST; this row must never become
+  // REJECTED now. The obligation update is best-effort and can't lose the receipt.
+  await finalizeSubmission(submissionId, {
+    hmrcReceiptId: result.receiptId,
+    receiptJson: json(result),
+    status: result.status,
+  });
+  await prisma.mtdObligation
+    .update({ where: { id: obligationRow.id }, data: { status: ObligationStatus.FULFILLED } })
+    .catch(() => {});
+  revalidate();
+  return { ok: true, receiptId: result.receiptId, status: result.status };
 }
 
 /** Submit the End-of-Period Statement for a business + tax year. */
@@ -343,12 +335,6 @@ export async function submitEopsAction(input: {
   if (!conn || conn.status !== MtdStatus.CONNECTED) return { error: "Connect to HMRC first." };
   if (!conn.businessIncomeSourceId) return { error: "No business income source selected." };
 
-  await assertNotAlreadyAccepted({
-    mtdConnectionId: conn.id,
-    type: SUBMISSION_TYPE_EOPS,
-    taxYearLabel: taxYear,
-  });
-
   const submissionId = await recordPendingSubmission({
     mtdConnectionId: conn.id,
     type: SUBMISSION_TYPE_EOPS,
@@ -357,32 +343,35 @@ export async function submitEopsAction(input: {
     submittedByUserId: who.userId,
     submittedByMembershipId: who.membershipId,
   });
+  let result;
   try {
-    const result = await services.hmrc.submitEops({
+    result = await services.hmrc.submitEops({
       entityId,
       taxYear,
       businessId: conn.businessIncomeSourceId,
       agentContext: who.agentContext,
       fraudHeaders: await fraud(input.clientHints, conn.deviceId, who.agentContext),
     });
-    await finalizeSubmission(submissionId, {
-      hmrcReceiptId: result.receiptId,
-      receiptJson: json(result),
-      status: result.status,
-    });
-    revalidate();
-    return { ok: true, receiptId: result.receiptId, status: result.status };
   } catch (e) {
     await recordError(submissionId, { message: (e as Error).message });
     revalidate();
     return { error: (e as Error).message };
   }
+  await finalizeSubmission(submissionId, {
+    hmrcReceiptId: result.receiptId,
+    receiptJson: json(result),
+    status: result.status,
+  });
+  revalidate();
+  return { ok: true, receiptId: result.receiptId, status: result.status };
 }
 
 /** Submit the Final Declaration (crystallisation) for a tax year. */
 export async function submitFinalDeclarationAction(input: {
   taxYear?: string;
-  calculationId: string;
+  /** Ignored for the filing — the action triggers its own final calculation;
+   *  the UI passes the latest calc id only to gate the button. */
+  calculationId?: string;
   confirm: string;
   clientHints?: ClientHints;
 }): Promise<SubmitResult> {
@@ -393,41 +382,80 @@ export async function submitFinalDeclarationAction(input: {
   const conn = await prisma.mtdConnection.findUnique({ where: { accountId: entityId } });
   if (!conn || conn.status !== MtdStatus.CONNECTED) return { error: "Connect to HMRC first." };
 
-  await assertNotAlreadyAccepted({
-    mtdConnectionId: conn.id,
-    type: SubmissionType.FINAL_DECLARATION,
-    taxYearLabel: taxYear,
-  });
+  // Crystallisation must use a FINAL-DECLARATION calculation, not the in-year
+  // estimate the client may have. Trigger one server-side and poll to READY so
+  // the calculationId is authoritative and owned by this connection.
+  let calculationId: string;
+  try {
+    calculationId = await runFinalCalculation(entityId, taxYear, conn.id);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 
   const submissionId = await recordPendingSubmission({
     mtdConnectionId: conn.id,
     type: SubmissionType.FINAL_DECLARATION,
     taxYearLabel: taxYear,
-    payload: { calculationId: input.calculationId, taxYear },
+    payload: { calculationId, taxYear },
     submittedByUserId: who.userId,
     submittedByMembershipId: who.membershipId,
   });
+
+  let result;
   try {
-    const result = await services.hmrc.submitFinalDeclaration({
+    result = await services.hmrc.submitFinalDeclaration({
       entityId,
       taxYear,
-      calculationId: input.calculationId,
+      calculationId,
       agentContext: who.agentContext,
       fraudHeaders: await fraud(input.clientHints, conn.deviceId, who.agentContext),
     });
-    await finalizeSubmission(submissionId, {
-      hmrcReceiptId: result.receiptId,
-      receiptJson: json(result),
-      calculationId: input.calculationId,
-      status: result.status,
-    });
-    revalidate();
-    return { ok: true, receiptId: result.receiptId, status: result.status };
   } catch (e) {
     await recordError(submissionId, { message: (e as Error).message });
     revalidate();
     return { error: (e as Error).message };
   }
+  await finalizeSubmission(submissionId, {
+    hmrcReceiptId: result.receiptId,
+    receiptJson: json(result),
+    calculationId,
+    status: result.status,
+  });
+  revalidate();
+  return { ok: true, receiptId: result.receiptId, status: result.status };
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Trigger a final-declaration calculation, persist it, and poll until READY. */
+async function runFinalCalculation(
+  entityId: string,
+  taxYear: string,
+  connId: string,
+): Promise<string> {
+  const { calculationId } = await services.hmrc.triggerCalculation({
+    entityId,
+    taxYear,
+    calculationType: "final-declaration",
+  });
+  await prisma.mtdCalculation.upsert({
+    where: { calculationId },
+    create: {
+      mtdConnectionId: connId,
+      taxYearLabel: taxYear,
+      calculationId,
+      status: CalcStatus.PENDING,
+      kind: CalcKind.CRYSTALLISED,
+    },
+    update: { status: CalcStatus.PENDING },
+  });
+  for (let i = 0; i < 15; i++) {
+    const calc = await services.hmrc.getCalculation({ entityId, taxYear, calculationId });
+    if (calc.status === "READY") return calculationId;
+    if (calc.status === "ERROR") throw new Error("HMRC could not produce a final calculation.");
+    await sleep(800);
+  }
+  throw new Error("HMRC is still preparing the final calculation — try again shortly.");
 }
 
 // ---------------------------------------------------------------------------

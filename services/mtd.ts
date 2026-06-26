@@ -17,10 +17,15 @@ async function getPeriodTxns(
   from: Date,
   to: Date,
 ): Promise<TxnForEstimate[]> {
+  // The obligation endDate is a midnight boundary; include the WHOLE last day by
+  // using an exclusive upper bound at the start of the next day (so a txn at
+  // 5 Jul 14:00 isn't dropped).
+  const toExclusive = new Date(to);
+  toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
   const rows = await prisma.transaction.findMany({
     where: {
       accountId: entityId,
-      date: { gte: from, lte: to },
+      date: { gte: from, lt: toExclusive },
       status: { not: TxnStatus.EXCLUDED },
       category: { not: null },
     },
@@ -112,16 +117,22 @@ export async function getMtdOverview(
         where: {
           mtdConnectionId: connection.id,
           status: SubmissionStatus.ACCEPTED,
-          periodKey: { not: null },
+          taxYearLabel: taxYear,
         },
-        select: { periodKey: true },
+        select: { periodKey: true, type: true },
       })
     : [];
-  const acceptedKeys = new Set(accepted.map((s) => s.periodKey));
-  const obligations = hmrcObligations.map((o) => ({
-    ...o,
-    status: acceptedKeys.has(o.periodKey) ? ("FULFILLED" as const) : o.status,
-  }));
+  // Quarterly updates match by periodKey; the Final Declaration obligation has no
+  // periodKey on the submission, so match it by type for this tax year.
+  const acceptedKeys = new Set(
+    accepted.map((s) => s.periodKey).filter((k): k is string => !!k),
+  );
+  const finalAccepted = accepted.some((s) => s.type === "FINAL_DECLARATION");
+  const obligations = hmrcObligations.map((o) => {
+    const fulfilled =
+      o.type === "FINAL_DECLARATION" ? finalAccepted : acceptedKeys.has(o.periodKey);
+    return { ...o, status: fulfilled ? ("FULFILLED" as const) : o.status };
+  });
 
   const submissions = connection
     ? await prisma.mtdSubmission.findMany({

@@ -49,6 +49,7 @@ export function CalculationCard({
 
   function run() {
     setError(null);
+    setCalc(null); // clear stale figures so the recompute shows "calculating…"
     start(async () => {
       const t = await triggerCalculationAction({ taxYear });
       if (t.error || !t.calculationId) {
@@ -64,9 +65,11 @@ export function CalculationCard({
           return;
         }
         setCalc(r.calculation);
-        if (r.calculation.status !== "PENDING") break;
+        if (r.calculation.status !== "PENDING") return;
         await sleep(POLL_MS);
       }
+      // Still pending after the bounded poll — don't spin forever.
+      setError("HMRC is still calculating — try again shortly.");
     });
   }
 

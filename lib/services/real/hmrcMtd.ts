@@ -303,11 +303,9 @@ export class RealHmrcMtdService implements HmrcMtdService {
     // fromDate/toDate are taken from the matching obligation and added here.
     const body = {
       income: {
-        periodAmount: toPounds(
-          s.income.rentIncome +
-            s.income.premiumsOfLeaseGrant +
-            s.income.otherPropertyIncome,
-        ),
+        // periodAmount is rent received ONLY; HMRC sums it with the separate
+        // premiumsOfLeaseGrant + otherIncome fields, so they must NOT be re-added.
+        periodAmount: toPounds(s.income.rentIncome),
         premiumsOfLeaseGrant: toPounds(s.income.premiumsOfLeaseGrant),
         otherIncome: toPounds(s.income.otherPropertyIncome),
       },
@@ -325,7 +323,8 @@ export class RealHmrcMtdService implements HmrcMtdService {
       `/individuals/business/property/${seg}/${nino}/${businessId}/period`,
       { method: "POST", body, fraudHeaders: input.fraudHeaders },
     );
-    const receiptId = json.transactionReference ?? json.submissionId ?? "";
+    const receiptId = json.transactionReference ?? json.submissionId;
+    if (!receiptId) throw new HmrcApiError("HMRC accepted the update but returned no receipt id", 200);
     return { submissionId: json.submissionId ?? receiptId, receiptId, status: "ACCEPTED" as const };
   }
 
@@ -338,18 +337,17 @@ export class RealHmrcMtdService implements HmrcMtdService {
     const conn = await this.connection(input.entityId);
     const nino = this.requireNino(conn.nino);
     const { from, to } = taxYearToFromTo(input.taxYear);
-    // EOPS was folded into crystallisation in newer API versions; this is
-    // version-guarded by HMRC_ACCEPT and may 410 on the latest sandbox.
+    // End-of-Period Statement endpoint (type segment is the full "uk-property").
+    // EOPS was folded into crystallisation in newer API versions and may 410 on
+    // the latest sandbox; version is negotiated via HMRC_ACCEPT.
     const json = await this.apiFetch<{ transactionReference?: string }>(
       input.entityId,
-      `/individuals/business/property/${nino}/${input.businessId}/${from}/${to}/declaration`,
+      `/individuals/business/end-of-period-statement/uk-property/${nino}/${input.businessId}/${from}/${to}`,
       { method: "POST", body: { finalised: true }, fraudHeaders: input.fraudHeaders },
     );
-    return {
-      submissionId: `eops-${input.taxYear}`,
-      receiptId: json.transactionReference ?? "",
-      status: "ACCEPTED" as const,
-    };
+    const receiptId = json.transactionReference;
+    if (!receiptId) throw new HmrcApiError("HMRC accepted the EOPS but returned no receipt id", 200);
+    return { submissionId: `eops-${input.taxYear}`, receiptId, status: "ACCEPTED" as const };
   }
 
   async submitFinalDeclaration(input: {
@@ -365,11 +363,9 @@ export class RealHmrcMtdService implements HmrcMtdService {
       `/individuals/calculations/${nino}/self-assessment/${input.taxYear}/${input.calculationId}/crystallise`,
       { method: "POST", body: {}, fraudHeaders: input.fraudHeaders },
     );
-    return {
-      submissionId: `final-${input.taxYear}`,
-      receiptId: json.transactionReference ?? "",
-      status: "ACCEPTED" as const,
-    };
+    const receiptId = json.transactionReference;
+    if (!receiptId) throw new HmrcApiError("HMRC accepted the declaration but returned no receipt id", 200);
+    return { submissionId: `final-${input.taxYear}`, receiptId, status: "ACCEPTED" as const };
   }
 
   // -------------------------------------------------------------------------
@@ -405,15 +401,25 @@ export class RealHmrcMtdService implements HmrcMtdService {
   }): Promise<MtdCalculationDTO> {
     const conn = await this.connection(input.entityId);
     const nino = this.requireNino(conn.nino);
+    // NOTE: HMRC's calculation schema is large and version-dependent. The actual
+    // figures live under calculation.taxCalculation; endOfYearEstimate is only
+    // present for in-year estimates and is used as a fallback. Verify the exact
+    // field paths against the live sandbox for the negotiated API version.
     const json = await this.apiFetch<{
       metadata?: { calculationType?: string; calculationError?: unknown };
       calculation?: {
         taxCalculation?: {
-          incomeTax?: { incomeTaxCharged?: number };
           totalIncomeTaxAndNicsDue?: number;
           totalTaxableIncome?: number;
+          totalIncomeReceivedFromAllSources?: number;
+          totalAllowancesAndDeductions?: number;
         };
-        endOfYearEstimate?: { totalAllowancesAndDeductions?: number; totalEstimatedIncome?: number };
+        endOfYearEstimate?: {
+          totalAllowancesAndDeductions?: number;
+          totalEstimatedIncome?: number;
+          incomeTaxAndNicsDue?: number;
+          totalTaxableIncome?: number;
+        };
       };
       messages?: { type: string; text: string }[];
     }>(
@@ -425,21 +431,25 @@ export class RealHmrcMtdService implements HmrcMtdService {
     const calc = json.calculation?.taxCalculation;
     const eoy = json.calculation?.endOfYearEstimate;
     const crystallised = json.metadata?.calculationType === "crystallisation";
-    // A 200 with no taxCalculation yet means HMRC is still computing.
+    // A 200 with neither result block yet means HMRC is still computing.
     const status = json.metadata?.calculationError
       ? "ERROR"
-      : calc
+      : calc || eoy
         ? "READY"
         : "PENDING";
+    const pick = (a?: number, b?: number) => fromPounds(a ?? b);
     return {
       calculationId: input.calculationId,
       taxYear: input.taxYear,
       status,
       estimateOrCrystallised: crystallised ? "crystallised" : "estimate",
-      totalIncomePence: fromPounds(eoy?.totalEstimatedIncome),
-      totalAllowancesAndDeductionsPence: fromPounds(eoy?.totalAllowancesAndDeductions),
-      totalTaxableIncomePence: fromPounds(calc?.totalTaxableIncome),
-      incomeTaxAndNicsDuePence: fromPounds(calc?.totalIncomeTaxAndNicsDue),
+      totalIncomePence: pick(calc?.totalIncomeReceivedFromAllSources, eoy?.totalEstimatedIncome),
+      totalAllowancesAndDeductionsPence: pick(
+        calc?.totalAllowancesAndDeductions,
+        eoy?.totalAllowancesAndDeductions,
+      ),
+      totalTaxableIncomePence: pick(calc?.totalTaxableIncome, eoy?.totalTaxableIncome),
+      incomeTaxAndNicsDuePence: pick(calc?.totalIncomeTaxAndNicsDue, eoy?.incomeTaxAndNicsDue),
       messages: json.messages,
       metadataJson: json.metadata,
     };

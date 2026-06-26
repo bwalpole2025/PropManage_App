@@ -17,7 +17,7 @@ import { DisclaimerBanner } from "@/components/shared/disclaimer-banner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
-import { formatDate, relativeDays } from "@/lib/format";
+import { formatDate, formatDateTime, relativeDays } from "@/lib/format";
 import { ConnectHmrcButton } from "@/components/mtd/connect-hmrc-button";
 import { NinoForm } from "@/components/mtd/nino-form";
 import { HmrcSubmitDialog, type SubmitSummary } from "@/components/mtd/hmrc-submit-dialog";
@@ -304,7 +304,7 @@ export default async function MtdPage({
                 {mtd.submissions.map((s) => (
                   <TR key={s.id}>
                     <TD className="text-sm text-muted-foreground">
-                      {formatDate(s.submittedAt ?? s.createdAt)}
+                      {formatDateTime(s.submittedAt ?? s.createdAt)}
                     </TD>
                     <TD className="text-sm">{s.type.replace(/_/g, " ")}</TD>
                     <TD className="font-mono text-xs">{s.periodKey ?? "—"}</TD>

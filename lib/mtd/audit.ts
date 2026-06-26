@@ -20,54 +20,54 @@ export interface PendingSubmissionInput {
 }
 
 /**
- * Refuse a duplicate filing: throws if an ACCEPTED submission of the same type
- * already exists for the (periodKey | taxYear). Prevents double-filing on retry
- * or double-click — submitting twice to HMRC is irreversible.
+ * Write the PENDING audit row before calling HMRC — atomically refusing a
+ * duplicate. A Postgres advisory xact-lock keyed on (connection, type, period)
+ * serialises concurrent submits, and the in-transaction check rejects when an
+ * ACTIVE (PENDING or ACCEPTED) submission already exists. This closes the
+ * check-then-act race that two tabs / a double-click / accountant+owner could
+ * otherwise use to double-file the irreversible filing. A REJECTED row does not
+ * block, so a failed attempt can be retried.
  */
-export async function assertNotAlreadyAccepted(input: {
-  mtdConnectionId: string;
-  type: string;
-  periodKey?: string | null;
-  taxYearLabel: string;
-}): Promise<void> {
-  const existing = await prisma.mtdSubmission.findFirst({
-    where: {
-      mtdConnectionId: input.mtdConnectionId,
-      type: input.type,
-      status: SubmissionStatus.ACCEPTED,
-      ...(input.periodKey
-        ? { periodKey: input.periodKey }
-        : { taxYearLabel: input.taxYearLabel }),
-    },
-    select: { id: true, hmrcReceiptId: true },
-  });
-  if (existing) {
-    throw new Error(
-      `Already submitted to HMRC (receipt ${existing.hmrcReceiptId ?? existing.id}). ` +
-        `It cannot be submitted again.`,
-    );
-  }
-}
-
-/** Write the PENDING audit row before calling HMRC. */
 export async function recordPendingSubmission(
   input: PendingSubmissionInput,
 ): Promise<string> {
-  const row = await prisma.mtdSubmission.create({
-    data: {
-      mtdConnectionId: input.mtdConnectionId,
-      obligationId: input.obligationId ?? null,
-      type: input.type,
-      periodKey: input.periodKey ?? null,
-      taxYearLabel: input.taxYearLabel,
-      payload: input.payload,
-      status: SubmissionStatus.PENDING,
-      submittedByUserId: input.submittedByUserId,
-      submittedByMembershipId: input.submittedByMembershipId,
-    },
-    select: { id: true },
+  const lockKey = `mtd:${input.mtdConnectionId}:${input.type}:${input.periodKey ?? input.taxYearLabel}`;
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`;
+    const active = await tx.mtdSubmission.findFirst({
+      where: {
+        mtdConnectionId: input.mtdConnectionId,
+        type: input.type,
+        status: { in: [SubmissionStatus.PENDING, SubmissionStatus.ACCEPTED] },
+        ...(input.periodKey
+          ? { periodKey: input.periodKey }
+          : { periodKey: null, taxYearLabel: input.taxYearLabel }),
+      },
+      select: { id: true, status: true, hmrcReceiptId: true },
+    });
+    if (active) {
+      throw new Error(
+        active.status === SubmissionStatus.ACCEPTED
+          ? `Already submitted to HMRC (receipt ${active.hmrcReceiptId ?? active.id}). It cannot be submitted again.`
+          : "A submission for this period is already in progress.",
+      );
+    }
+    const row = await tx.mtdSubmission.create({
+      data: {
+        mtdConnectionId: input.mtdConnectionId,
+        obligationId: input.obligationId ?? null,
+        type: input.type,
+        periodKey: input.periodKey ?? null,
+        taxYearLabel: input.taxYearLabel,
+        payload: input.payload,
+        status: SubmissionStatus.PENDING,
+        submittedByUserId: input.submittedByUserId,
+        submittedByMembershipId: input.submittedByMembershipId,
+      },
+      select: { id: true },
+    });
+    return row.id;
   });
-  return row.id;
 }
 
 /** Transition a PENDING row to ACCEPTED with the HMRC receipt. */

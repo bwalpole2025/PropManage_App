@@ -5,7 +5,7 @@ import { requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
 import { MtdStatus } from "@/lib/enums";
 import { verifyState } from "@/lib/mtd/state";
-import { MTD_REDIRECT_PATH } from "@/lib/mtd/constants";
+import { callbackUrlFromHeaders } from "@/lib/mtd/url";
 
 // HMRC OAuth redirect target. Validates the signed, single-use state, exchanges
 // the authorization code for tokens (the provider encrypts + persists them),
@@ -41,22 +41,25 @@ export async function GET(req: Request) {
   }
   if (user.id !== claim.userId) return back("error=state_user_mismatch");
 
-  // Single-use: the persisted nonce must match, then is cleared.
-  const conn = await prisma.mtdConnection.findUnique({
-    where: { accountId: claim.entityId },
-    select: { id: true, oauthState: true },
-  });
-  if (!conn || conn.oauthState !== claim.nonce) return back("error=state_reused");
-  await prisma.mtdConnection.update({
-    where: { id: conn.id },
+  // Single-use: atomically clear the nonce only if it still matches. A second
+  // (replayed) callback updates 0 rows and is rejected — no check-then-act race.
+  const consumed = await prisma.mtdConnection.updateMany({
+    where: { accountId: claim.entityId, oauthState: claim.nonce },
     data: { oauthState: null },
   });
+  if (consumed.count === 0) return back("error=state_reused");
+  const conn = await prisma.mtdConnection.findUnique({
+    where: { accountId: claim.entityId },
+    select: { id: true },
+  });
+  if (!conn) return back("error=state_reused");
 
   // mockAuth=1 (dev) synthesizes the code the real provider receives from HMRC.
   const code = sp.get("mockAuth") === "1" ? "mock-auth-code" : sp.get("code");
   if (!code) return back("error=missing_code");
 
-  const redirectUri = `${url.origin}${MTD_REDIRECT_PATH}`;
+  // Must byte-match the redirect_uri sent to /authorize (proxy-aware).
+  const redirectUri = callbackUrlFromHeaders(req.headers);
   try {
     const result = await services.hmrc.exchangeCode({
       entityId: claim.entityId,

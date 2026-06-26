@@ -55,6 +55,19 @@ export function formatDateShort(date: Date | string): string {
   return dateFmtShort.format(new Date(date));
 }
 
+const dateTimeFmt = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** Date + time, e.g. "05 Jul 2026, 14:32" — distinguishes same-day events. */
+export function formatDateTime(date: Date | string): string {
+  return dateTimeFmt.format(new Date(date));
+}
+
 const monthShortFmt = new Intl.DateTimeFormat("en-GB", { month: "short" });
 
 /** Ordinal day + short month, e.g. "5th Jul", "1st Aug", "22nd Sep". */
