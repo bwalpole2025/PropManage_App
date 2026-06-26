@@ -113,21 +113,23 @@ export class MockHmrcMtdService implements HmrcMtdService {
     // Persist synthetic encrypted tokens like the real adapter. When the entity
     // isn't a real Account (e.g. the standalone drive), fall back to a synthetic
     // connection id rather than violating the FK.
-    try {
-      const conn = await prisma.mtdConnection.upsert({
-        where: { accountId: input.entityId },
-        create: { accountId: input.entityId, status: MtdStatus.NOT_CONNECTED, ...tokens },
-        update: tokens,
-        select: { id: true },
-      });
-      return { connectionId: conn.id, expiresAt: expiresAt.toISOString(), hmrcUserId };
-    } catch {
+    const account = await prisma.account
+      .findUnique({ where: { id: input.entityId }, select: { id: true } })
+      .catch(() => null);
+    if (!account) {
       return {
         connectionId: `mock-mtd-${input.entityId}`,
         expiresAt: expiresAt.toISOString(),
         hmrcUserId,
       };
     }
+    const conn = await prisma.mtdConnection.upsert({
+      where: { accountId: input.entityId },
+      create: { accountId: input.entityId, status: MtdStatus.NOT_CONNECTED, ...tokens },
+      update: tokens,
+      select: { id: true },
+    });
+    return { connectionId: conn.id, expiresAt: expiresAt.toISOString(), hmrcUserId };
   }
 
   async listIncomeSources(): Promise<MtdIncomeSourceDTO[]> {
