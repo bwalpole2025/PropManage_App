@@ -15,6 +15,7 @@ export function SettingsTabs() {
     { href: "/settings/team", label: "Team & access" },
     { href: "/settings/security", label: "Security" },
     { href: "/settings/activity", label: "Activity log" },
+    { href: "/settings/privacy", label: "Privacy" },
   ];
   return (
     <div className="flex flex-wrap gap-1 border-b border-border">

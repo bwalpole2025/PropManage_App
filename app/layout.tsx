@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { CookieConsent } from "@/components/shared/cookie-consent";
 
 // Clean geometric sans — drives --font-sans (tailwind `font-sans`) app-wide.
 const poppins = Poppins({
@@ -26,6 +27,7 @@ export default function RootLayout({
     <html lang="en-GB" className={poppins.variable}>
       <body className="min-h-screen font-sans antialiased">
         <Providers>{children}</Providers>
+        <CookieConsent />
       </body>
     </html>
   );
