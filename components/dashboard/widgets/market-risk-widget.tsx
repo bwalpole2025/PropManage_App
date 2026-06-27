@@ -22,7 +22,7 @@ export function MarketRiskWidget({
 }) {
   const up = risk.gainPence >= 0;
   return (
-    <WidgetCard className={className}>
+    <WidgetCard href="/properties" linkLabel="View properties" className={className}>
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle>Market Risk</CardTitle>

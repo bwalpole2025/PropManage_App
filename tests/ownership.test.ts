@@ -40,10 +40,11 @@ describe("apportionTxnsByOwnership", () => {
     expect(ownerEstimate.totalAllowableExpensesPence).toBe(
       full.totalAllowableExpensesPence / 2,
     );
-    // Income £5,000, expenses £2,000 → taxable £3,000 → 20% = £600.
+    // Income £5,000, expenses £2,000 → taxable £3,000, which is below the
+    // £12,570 personal allowance ⇒ £0 (property is the owner's only income).
     expect(ownerEstimate.totalIncomePence).toBe(500_000);
     expect(ownerEstimate.totalAllowableExpensesPence).toBe(200_000);
-    expect(ownerEstimate.estimatedTaxPence).toBe(60_000);
+    expect(ownerEstimate.estimatedTaxPence).toBe(0);
   });
 
   it("splits 70/30 between two owners", () => {

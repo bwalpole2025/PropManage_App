@@ -19,6 +19,11 @@ export interface TaxYearConfig {
   corporationTaxRate: number;
   /** Standard personal allowance. */
   personalAllowancePence: number;
+  /**
+   * Income above which the personal allowance tapers (£1 lost per £2 over this).
+   * The allowance reaches zero at this + 2× the allowance.
+   */
+  personalAllowanceTaperThresholdPence: number;
   /** Taxable income (above the personal allowance) taxed at the basic rate. */
   basicRateLimitPence: number;
   /** Income at which the higher rate begins (personal allowance + basic-rate limit). */
@@ -29,6 +34,7 @@ export interface TaxYearConfig {
 
 const PROPERTY_ALLOWANCE = 100_000; // £1,000 — unchanged across these years
 const PERSONAL_ALLOWANCE = 1_257_000; // £12,570 — frozen 2021-22..2027-28
+const PA_TAPER_THRESHOLD = 10_000_000; // £100,000 — PA tapers £1 per £2 above this
 const BASIC_RATE_LIMIT = 3_770_000; // £37,700
 const HIGHER_RATE_THRESHOLD = 5_027_000; // £50,270 (PA + basic-rate limit)
 const RUK_BANDS: Record<TaxBand, number> = { BASIC: 0.2, HIGHER: 0.4, ADDITIONAL: 0.45 };
@@ -38,6 +44,7 @@ const base = {
   financeCostReliefRate: 0.2,
   incomeTaxBandRates: RUK_BANDS,
   personalAllowancePence: PERSONAL_ALLOWANCE,
+  personalAllowanceTaperThresholdPence: PA_TAPER_THRESHOLD,
   basicRateLimitPence: BASIC_RATE_LIMIT,
   higherRateThresholdPence: HIGHER_RATE_THRESHOLD,
 };

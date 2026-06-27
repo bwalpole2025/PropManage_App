@@ -24,6 +24,7 @@ import {
 } from "@/lib/enums";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
+import { assertAssuredPeriodic } from "@/services/compliance/guards";
 import { getDefaultPortfolio } from "@/services/shared";
 import {
   cameraPositionSchema,
@@ -137,7 +138,10 @@ export async function createTenancyAction(formData: FormData) {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid tenancy");
   }
-  await createTenancyCore(entityId, tenancyInputFromForm(parsed.data));
+  const input = tenancyInputFromForm(parsed.data);
+  // RRA 2025: new tenancies must be assured periodic — reject a fixed end date.
+  assertAssuredPeriodic({ endDate: input.endDate });
+  await createTenancyCore(entityId, input);
   revalidateTenancy(parsed.data.propertyId);
 }
 
@@ -153,7 +157,10 @@ export async function createTenancyState(
     if (!parsed.success) {
       return { error: parsed.error.issues[0]?.message ?? "Invalid tenancy" };
     }
-    await createTenancyCore(entityId, tenancyInputFromForm(parsed.data));
+    const input = tenancyInputFromForm(parsed.data);
+    // RRA 2025: new tenancies must be assured periodic — reject a fixed end date.
+    assertAssuredPeriodic({ endDate: input.endDate });
+    await createTenancyCore(entityId, input);
     revalidateTenancy(parsed.data.propertyId);
     return { ok: true, at: Date.now() };
   } catch (e) {

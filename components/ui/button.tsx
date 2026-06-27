@@ -15,9 +15,12 @@ const variants: Record<Variant, string> = {
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-8 px-4 text-sm",
-  md: "h-10 px-5 text-sm",
-  lg: "h-11 px-7 text-base",
+  // Roomier pills: generous horizontal padding so the label isn't cramped
+  // against the rounded edges. `md` keeps h-10 to stay aligned with inputs
+  // (which are h-10) when a button sits next to one in a form/toolbar.
+  sm: "h-8 px-5 text-sm",
+  md: "h-10 px-7 text-sm",
+  lg: "h-12 px-10 text-base",
   icon: "h-9 w-9",
 };
 

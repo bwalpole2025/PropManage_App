@@ -1,6 +1,6 @@
 # PropManage
 
-A UK landlord finance & property-management SaaS (Hammock-style). It helps individual
+A UK landlord finance & property-management SaaS. It helps individual
 and portfolio landlords replace spreadsheets: track rental income & expenses, monitor
 rent arrears, store compliance documents with expiry reminders, estimate tax against the
 SA105 property pages, and stay ready for Making Tax Digital (MTD) for Income Tax.

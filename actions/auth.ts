@@ -26,6 +26,8 @@ import {
 export interface AuthFormState {
   error?: string;
   success?: string;
+  /** Set when the password was correct but a 2FA code is needed to continue. */
+  twoFactorRequired?: boolean;
 }
 
 function appBaseUrl(): string {
@@ -37,6 +39,7 @@ function appBaseUrl(): string {
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  code: z.string().optional(),
 });
 
 export async function loginAction(
@@ -46,17 +49,47 @@ export async function loginAction(
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
+    code: formData.get("code"),
   });
   if (!parsed.success) return { error: "Enter a valid email and password." };
+  const { email, password, code } = parsed.data;
+
+  // Verify the password first so we can decide whether to prompt for a 2FA code
+  // without revealing 2FA status for a wrong password. The TOTP code itself is
+  // verified in exactly one place — authorize() in lib/auth/index.ts, the real
+  // security boundary — so there's no double-verification timing race.
+  const user = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+  });
+  const passwordOk =
+    !!user?.passwordHash && (await bcrypt.compare(password, user.passwordHash));
+  if (!user || !passwordOk) {
+    return { error: "Invalid email or password." };
+  }
+
+  // Password is correct: if 2FA is on and no code was supplied yet, ask for one.
+  const hasCode = !!(code ?? "").replace(/\D/g, "");
+  if (user.twoFactorEnabled && !hasCode) {
+    return { twoFactorRequired: true };
+  }
 
   try {
     await signIn("credentials", {
-      email: parsed.data.email,
-      password: parsed.data.password,
+      email,
+      password,
+      totp: code ?? "",
       redirectTo: "/dashboard",
     });
   } catch (error) {
     if (error instanceof AuthError) {
+      // The password already checked out above, so an auth failure here can only
+      // be a rejected TOTP code (which authorize() enforces for 2FA accounts).
+      if (user.twoFactorEnabled) {
+        return {
+          twoFactorRequired: true,
+          error: "That code is incorrect — try again.",
+        };
+      }
       return { error: "Invalid email or password." };
     }
     throw error; // re-throw NEXT_REDIRECT so navigation works

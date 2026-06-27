@@ -3,7 +3,7 @@
 // here.
 //
 // Preferences are two independent axes that combine multiplicatively:
-//   • channels    — HOW a notification reaches you (in-app, email, mobile/push)
+//   • channels    — HOW a notification reaches you (in-app, email)
 //   • categories  — WHICH kinds of operational alert you want
 // A notification for category C is delivered on channel H iff BOTH
 // `categories[C]` and `channels[H]` are enabled. So toggling a single channel
@@ -21,7 +21,6 @@
 export const NotificationChannel = {
   inApp: "inApp",
   email: "email",
-  push: "push",
 } as const;
 export type NotificationChannel =
   (typeof NotificationChannel)[keyof typeof NotificationChannel];
@@ -31,7 +30,6 @@ export const NOTIFICATION_CHANNELS = Object.values(NotificationChannel);
 export const NotificationChannelLabel: Record<NotificationChannel, string> = {
   inApp: "In-app",
   email: "Email",
-  push: "Mobile / push",
 };
 
 export const NotificationChannelDescription: Record<
@@ -40,7 +38,6 @@ export const NotificationChannelDescription: Record<
 > = {
   inApp: "Show in the in-app notifications inbox.",
   email: "Send to your account email address.",
-  push: "Send to your verified mobile (requires a verified number).",
 };
 
 // ---------------------------------------------------------------------------
@@ -91,7 +88,7 @@ export interface NotificationPreferences {
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
-  channels: { inApp: true, email: true, push: false },
+  channels: { inApp: true, email: true },
   categories: {
     complianceReminders: true,
     rentAndArrears: true,

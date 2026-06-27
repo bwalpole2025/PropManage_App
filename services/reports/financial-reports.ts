@@ -14,7 +14,7 @@ import {
 } from "@/lib/format";
 import type { ReportFilters } from "@/lib/reports/filters";
 import type { ReportDocument, ReportRow, ReportSection } from "@/lib/reports/types";
-import { groupByCategory, sumIn, sumOut } from "@/lib/reports/aggregate";
+import { sumIn, sumOut } from "@/lib/reports/aggregate";
 import {
   getCompanies,
   getReportEntity,
@@ -22,17 +22,17 @@ import {
   resolvePortfolioScope,
   type ScopedTxn,
 } from "./data";
-import { standardMeta, standardSubtitle } from "./_shared";
+import {
+  CATEGORY_DRILLDOWN_NOTE,
+  CATEGORY_TABLE_COLUMNS,
+  categoryRowsWithDetail,
+  standardMeta,
+  standardSubtitle,
+} from "./_shared";
 
 // ---------------------------------------------------------------------------
 // Annual Report — overview for a portfolio and tax year.
 // ---------------------------------------------------------------------------
-
-const CATEGORY_COLS = [
-  { key: "category", label: "Category" },
-  { key: "count", label: "Txns", type: "number" as const },
-  { key: "amount", label: "Amount", type: "currency" as const },
-];
 
 export async function buildAnnualReport(
   entityId: string,
@@ -73,8 +73,8 @@ export async function buildAnnualReport(
     .filter((t) => (isKnownCategory(t.category) ? categoryTreatment(t.category) === "INCOME" : true))
     .reduce((s, t) => s + t.amountPence, 0);
 
-  const incomeGroups = groupByCategory(incomeTxns);
-  const expenseGroups = groupByCategory(expenseTxns);
+  const incomeByCategory = categoryRowsWithDetail(incomeTxns);
+  const expenseByCategory = categoryRowsWithDetail(expenseTxns);
 
   // Per-property performance.
   const perProp = new Map<string, { label: string; income: number; expense: number }>();
@@ -132,10 +132,12 @@ export async function buildAnnualReport(
         title: "Income by category",
         tables: [
           {
-            columns: CATEGORY_COLS,
-            rows: incomeGroups.map((g) => ({ category: g.label, count: g.count, amount: g.amountPence })),
+            columns: CATEGORY_TABLE_COLUMNS,
+            rows: incomeByCategory.rows,
+            rowDetails: incomeByCategory.rowDetails,
             totals: { category: "Total income", count: incomeTxns.length, amount: totalIncome },
             emptyText: "No income recorded for this tax year.",
+            note: CATEGORY_DRILLDOWN_NOTE,
           },
         ],
       },
@@ -143,10 +145,12 @@ export async function buildAnnualReport(
         title: "Expenses by category",
         tables: [
           {
-            columns: CATEGORY_COLS,
-            rows: expenseGroups.map((g) => ({ category: g.label, count: g.count, amount: g.amountPence })),
+            columns: CATEGORY_TABLE_COLUMNS,
+            rows: expenseByCategory.rows,
+            rowDetails: expenseByCategory.rowDetails,
             totals: { category: "Total expenses", count: expenseTxns.length, amount: totalExpenses },
             emptyText: "No expenses recorded for this tax year.",
+            note: CATEGORY_DRILLDOWN_NOTE,
           },
         ],
       },
@@ -168,7 +172,7 @@ export async function buildAnnualReport(
       },
     ],
     disclaimer:
-      "A year-end overview from your recorded transactions. For your Self Assessment figures, see the Hammock Tax Statement.",
+      "A year-end overview from your recorded transactions. For your Self Assessment figures, see the Tax Statement.",
   };
 }
 

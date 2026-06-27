@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { ExpandableReportTable } from "@/components/reports/report-table";
 import {
   columnAlign,
   type CellValue,
@@ -82,6 +83,11 @@ function SummaryGrid({ items }: { items: SummaryItem[] }) {
 }
 
 function ReportTableView({ table }: { table: ReportTable }) {
+  // Tables with expandable per-row detail (e.g. the P&L categories) need client
+  // interactivity, so they render via the client accordion component instead.
+  if (table.rowDetails?.some(Boolean)) {
+    return <ExpandableReportTable table={table} />;
+  }
   if (table.rows.length === 0) {
     return (
       <div>

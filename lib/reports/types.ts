@@ -25,12 +25,29 @@ export interface ReportColumn {
 export type CellValue = string | number | Date | null | undefined;
 export type ReportRow = Record<string, CellValue>;
 
+/**
+ * Nested detail revealed when a parent row is expanded (screen only). Lets a
+ * summary row — e.g. a P&L category — drill down to the transactions behind it.
+ */
+export interface RowDetail {
+  columns: ReportColumn[];
+  rows: ReportRow[];
+  /** Shown when there are no detail rows. */
+  emptyText?: string;
+}
+
 export interface ReportTable {
   title?: string;
   columns: ReportColumn[];
   rows: ReportRow[];
   /** Optional totals/footer row, keyed by column key. */
   totals?: ReportRow;
+  /**
+   * Optional expandable detail per row, aligned 1:1 with `rows` by index. On
+   * screen a row with detail becomes a clickable accordion that reveals the
+   * detail sub-table; CSV/PDF ignore this and export the summary rows only.
+   */
+  rowDetails?: (RowDetail | null)[];
   /** Shown when `rows` is empty (instead of the table). */
   emptyText?: string;
   /** Small caption printed under the table. */

@@ -1,5 +1,10 @@
 import { prisma, type PrismaTx } from "@/lib/db";
-import { TenancyStatus, type DepositScheme, type RentFrequency } from "@/lib/enums";
+import {
+  TenancyAgreementType,
+  TenancyStatus,
+  type DepositScheme,
+  type RentFrequency,
+} from "@/lib/enums";
 import { syncRentSchedule } from "@/services/rent-schedule";
 
 export interface CreateTenancyInput {
@@ -45,12 +50,20 @@ export async function createTenancyCore(
     : null;
   const status =
     endMs !== null && endMs < todayMs ? TenancyStatus.ENDED : TenancyStatus.ACTIVE;
+  // A past-dated end (historical import) is a pre-RRA fixed term; otherwise the
+  // RRA default applies. The user-facing create action additionally hard-blocks
+  // any end date, so a LEGACY_FIXED only ever originates from the importer.
+  const agreementType =
+    input.endDate && status === TenancyStatus.ENDED
+      ? TenancyAgreementType.LEGACY_FIXED
+      : TenancyAgreementType.ASSURED_PERIODIC;
 
   return prisma.$transaction(async (tx: PrismaTx) => {
     const tenancy = await tx.tenancy.create({
       data: {
         propertyId: input.propertyId,
         status,
+        agreementType,
         startDate: input.startDate,
         endDate: input.endDate ?? null,
         rentPence: input.rentPence,

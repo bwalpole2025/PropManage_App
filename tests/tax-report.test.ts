@@ -55,7 +55,11 @@ describe("taxStatementReportToCsv", () => {
     financeCostsPence: 0,
     financeCostTaxReductionPence: 0,
     propertyAllowanceUsedPence: 0,
+    personalAllowanceUsedPence: 0,
     estimatedTaxPence: 230_000,
+    bandSlices: [],
+    progressive: false,
+    effectiveRate: 0.2,
     owners: [
       {
         id: "o1",

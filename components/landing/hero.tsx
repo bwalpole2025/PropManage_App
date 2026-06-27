@@ -51,7 +51,7 @@ export function Hero({ isAuthed }: { isAuthed: boolean }) {
           <p className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-wide backdrop-blur">
             Compliance · Property management · Tax
           </p>
-          <h1 className="text-4xl font-bold leading-tight tracking-tight md:text-6xl">
+          <h1 className="text-4xl font-bold leading-snug tracking-tight md:text-6xl md:leading-[1.3]">
             Run your lettings with confidence.
           </h1>
           <p className="mt-5 max-w-xl text-lg text-white/80">

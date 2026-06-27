@@ -14,6 +14,7 @@ import {
   CalendarDays,
   BarChart3,
   HelpCircle,
+  ShieldCheck,
 } from "lucide-react";
 
 /** Cookie that persists the sidebar collapsed state (read SSR-side, set client-side). */
@@ -52,6 +53,7 @@ export const NAV: NavNode[] = [
   },
   { kind: "leaf", href: "/tax", label: "Tax", icon: Calculator },
   { kind: "leaf", href: "/mtd", label: "MTD", icon: FileCheck2 },
+  { kind: "leaf", href: "/compliance", label: "Compliance", icon: ShieldCheck },
   {
     kind: "group",
     label: "Files & Dates",
@@ -80,6 +82,12 @@ export const ROUTE_LABELS: Record<string, string> = {
   tenancies: "Tenancies",
   tax: "Tax",
   mtd: "MTD",
+  compliance: "Compliance",
+  "compliance/guide": "Compliance guide",
+  "compliance/info": "Landlord information",
+  "compliance/hazards": "Hazards & repairs",
+  "compliance/pets": "Pet requests",
+  "compliance/registrations": "Registrations",
   files: "Files & Dates",
   "files/documents": "Documents",
   "files/notes": "Notes",

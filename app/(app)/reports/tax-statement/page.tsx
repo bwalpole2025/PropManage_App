@@ -17,7 +17,7 @@ import {
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { TaxReportControls } from "@/components/reports/tax-report-controls";
-import type { TaxBand } from "@/lib/tax";
+import { TaxBandLabel, type TaxBand } from "@/lib/tax";
 
 const pct = (rate: number) => `${(rate * 100).toFixed(rate * 100 % 1 === 0 ? 0 : 2)}%`;
 
@@ -116,7 +116,8 @@ export default async function TaxStatementReportPage({
           <CardHeader>
             <CardTitle>Tax forecast</CardTitle>
             <CardDescription>
-              {report.txnCount} categorised transaction(s) · estimate only
+              {report.txnCount} categorised transaction(s) · property income only
+              · estimate
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -136,6 +137,31 @@ export default async function TaxStatementReportPage({
                 <CurrencyValue pence={report.taxableProfitPence} />
               </Row>
             </div>
+            {report.personalAllowanceUsedPence > 0 ? (
+              <Row label="Personal allowance">
+                <CurrencyValue pence={-report.personalAllowanceUsedPence} />
+              </Row>
+            ) : null}
+            {report.bandSlices.length > 0 ? (
+              <div className="rounded-md bg-muted/40 p-3">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  Income-tax bands · property income only
+                </p>
+                <div className="space-y-1.5">
+                  {report.bandSlices.map((s) => (
+                    <div key={s.band} className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        {TaxBandLabel[s.band]} on{" "}
+                        <CurrencyValue pence={s.amountPence} />
+                      </span>
+                      <span className="tabular-nums">
+                        <CurrencyValue pence={s.taxPence} />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {report.financeCostsPence > 0 ? (
               <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
                 Residential finance costs of{" "}

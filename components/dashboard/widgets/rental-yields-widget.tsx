@@ -29,7 +29,13 @@ export function RentalYieldsWidget({
       : { label: "Track a transaction", href: "/transactions/new" };
 
   return (
-    <WidgetCard locked={yields.locked} lockCta={lockCta} className={className}>
+    <WidgetCard
+      href="/properties"
+      linkLabel="View properties"
+      locked={yields.locked}
+      lockCta={lockCta}
+      className={className}
+    >
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle>Rental Yields</CardTitle>

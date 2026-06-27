@@ -1,6 +1,7 @@
 import { LandlordType, LandlordTypeLabel } from "@/lib/enums";
 import { Sa105Box, Sa105BoxLabel } from "@/lib/sa105";
 import { getTaxYearConfig, type TaxBand } from "@/lib/tax-config";
+import { TaxBandLabel, type TaxBandSlice } from "@/lib/tax";
 import { formatDate, taxYearLabelFor } from "@/lib/format";
 import { toCsv } from "@/lib/csv";
 import type { ReportDocument } from "@/lib/reports/types";
@@ -37,7 +38,15 @@ export interface TaxStatementReport {
   financeCostsPence: number;
   financeCostTaxReductionPence: number;
   propertyAllowanceUsedPence: number;
+  /** £12,570 personal allowance applied to the summed property profit (with taper). */
+  personalAllowanceUsedPence: number;
   estimatedTaxPence: number;
+  /** Per-band breakdown of the income-tax charge (progressive, property-only). */
+  bandSlices: TaxBandSlice[];
+  /** True when computed progressively across the personal allowance + bands. */
+  progressive: boolean;
+  /** Blended effective rate as a fraction (estimatedTax ÷ taxable profit). */
+  effectiveRate: number;
   owners: ReportOwner[];
   // The versioned tax-year parameters used (for transparency / audit).
   config: {
@@ -96,7 +105,7 @@ export function reportLinesFromBreakdown(
 }
 
 /**
- * The Hammock Tax Statement report — the SA105-aligned view of the tax
+ * The Tax Statement report — the SA105-aligned view of the tax
  * estimation engine for a tax year: income lines, expenses by category, the
  * summary, per-owner pro-rata figures, and the versioned tax-year parameters.
  * Scoped by accountId (via the underlying services).
@@ -122,12 +131,18 @@ export async function getTaxStatementReport(
     isCompany,
   );
 
+  // Progressive (property-only) shows the blended effective rate; an explicit
+  // marginal band (or a company) shows that single flat rate.
   const appliedRate = isCompany
     ? cfg.corporationTaxRate
-    : cfg.incomeTaxBandRates[estimate.taxBand];
+    : estimate.progressive
+      ? estimate.effectiveRate
+      : cfg.incomeTaxBandRates[estimate.taxBand];
   const appliedRateLabel = isCompany
     ? "Corporation tax"
-    : `${estimate.taxBand} rate`;
+    : estimate.progressive
+      ? "Effective rate"
+      : `${estimate.taxBand} rate`;
 
   const owners: ReportOwner[] = ownerTax.owners
     .filter((o) => o.ownedPropertyCount > 0)
@@ -156,7 +171,11 @@ export async function getTaxStatementReport(
     financeCostsPence: estimate.financeCostsPence,
     financeCostTaxReductionPence: estimate.financeCostTaxReductionPence,
     propertyAllowanceUsedPence: estimate.propertyAllowanceUsedPence,
+    personalAllowanceUsedPence: estimate.personalAllowanceUsedPence,
     estimatedTaxPence: estimate.estimatedTaxPence,
+    bandSlices: estimate.bandSlices,
+    progressive: estimate.progressive,
+    effectiveRate: estimate.effectiveRate,
     owners,
     config: {
       propertyAllowancePence: cfg.propertyAllowancePence,
@@ -201,8 +220,20 @@ export function taxStatementReportToCsv(report: TaxStatementReport): string {
     row("Property allowance", "", "", gbp(report.propertyAllowanceUsedPence));
   }
   row("Taxable profit", "", "", gbp(report.taxableProfitPence));
+  if (report.personalAllowanceUsedPence > 0) {
+    row("Personal allowance", "", "", gbp(report.personalAllowanceUsedPence));
+  }
   row("Finance costs", "", "", gbp(report.financeCostsPence));
   row("Finance-cost tax reduction", "", "", gbp(report.financeCostTaxReductionPence));
+
+  if (report.bandSlices.length > 0) {
+    row();
+    row("Tax band", "Rate", "Taxable amount (GBP)", "Tax (GBP)");
+    for (const s of report.bandSlices) {
+      row(TaxBandLabel[s.band], `${(s.rate * 100).toFixed(0)}%`, gbp(s.amountPence), gbp(s.taxPence));
+    }
+  }
+
   row("Estimated tax", "", "", gbp(report.estimatedTaxPence));
 
   if (report.owners.length > 0) {
@@ -245,6 +276,9 @@ export function taxStatementReportToDocument(report: TaxStatementReport): Report
     summary.push({ label: "Property allowance", pence: report.propertyAllowanceUsedPence });
   }
   summary.push({ label: "Taxable profit", pence: report.taxableProfitPence, tone: "auto" });
+  if (report.personalAllowanceUsedPence > 0) {
+    summary.push({ label: "Personal allowance", pence: report.personalAllowanceUsedPence });
+  }
   if (report.financeCostsPence > 0) {
     summary.push({ label: "Finance costs", pence: report.financeCostsPence });
   }
@@ -253,9 +287,41 @@ export function taxStatementReportToDocument(report: TaxStatementReport): Report
   }
   summary.push({ label: "Estimated tax", pence: report.estimatedTaxPence, emphasis: true });
 
+  // Progressive band breakdown (property income taxed as the only income).
+  const bandSection: ReportDocument["sections"] = report.bandSlices.length
+    ? [
+        {
+          title: "Tax bands",
+          tables: [
+            {
+              columns: [
+                { key: "band", label: "Band" },
+                { key: "rate", label: "Rate" },
+                { key: "amount", label: "Taxable amount", type: "currency" as const },
+                { key: "tax", label: "Tax", type: "currency" as const },
+              ],
+              rows: report.bandSlices.map((s) => ({
+                band: TaxBandLabel[s.band],
+                rate: `${(s.rate * 100).toFixed(0)}%`,
+                amount: s.amountPence,
+                tax: s.taxPence,
+              })),
+              totals: {
+                band: "Total",
+                rate: "",
+                amount: report.bandSlices.reduce((a, s) => a + s.amountPence, 0),
+                tax: report.bandSlices.reduce((a, s) => a + s.taxPence, 0),
+              },
+              note: "Property profit taxed as the only income — personal allowance then basic/higher/additional bands.",
+            },
+          ],
+        },
+      ]
+    : [];
+
   return {
     slug: "tax-statement",
-    title: "Hammock Tax Statement (SA105)",
+    title: "Tax Statement (SA105)",
     subtitle: `${report.entityName} · ${report.landlordTypeLabel}`,
     meta: [`Tax year: ${report.taxYear}`, `Generated: ${formatDate(new Date())}`],
     sections: [
@@ -282,6 +348,7 @@ export function taxStatementReportToDocument(report: TaxStatementReport): Report
         ],
       },
       { title: "Tax forecast", summary },
+      ...bandSection,
       {
         title: "Per-owner figures",
         tables: [

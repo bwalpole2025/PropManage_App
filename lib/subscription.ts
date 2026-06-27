@@ -8,7 +8,10 @@ import { SubscriptionStatus } from "@/lib/enums";
 
 export const TRIAL_DAYS = 30;
 export const PLAN_NAME = "PropManage Pro";
-export const PLAN_PRICE_PENCE = 1200; // £12.00
+// Single source of truth for the Pro price — the landing pricing page reads this
+// too (components/landing/pricing.tsx) so the marketing page and the in-app
+// subscription tab can never show different numbers.
+export const PLAN_PRICE_PENCE = 850; // £8.50
 export const PLAN_INTERVAL = "month";
 /** Card billing runs through this provider's HOSTED checkout — we never see raw card data. */
 export const PAYMENT_PROVIDER = "Stripe";
@@ -71,7 +74,7 @@ export function trialEndDateFromNow(now: Date = new Date()): Date {
   return new Date(now.getTime() + TRIAL_DAYS * 86_400_000);
 }
 
-/** "£12.00/month" style label. */
+/** "£8.50/month" style label. */
 export function planPriceLabel(): string {
   return `£${(PLAN_PRICE_PENCE / 100).toFixed(2)}/${PLAN_INTERVAL}`;
 }

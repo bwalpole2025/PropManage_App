@@ -44,6 +44,14 @@ export interface TaxEstimateOptions {
   landlordType?: LandlordType;
 }
 
+/** One slice of taxable profit taxed at a single band rate. */
+export interface TaxBandSlice {
+  band: TaxBand;
+  amountPence: number; // taxable profit falling in this band
+  rate: number; // 0.20 / 0.40 / 0.45
+  taxPence: number; // amountPence × rate (rounded)
+}
+
 export interface TaxEstimateResult {
   taxYear: string;
   boxBreakdown: Record<string, number>;
@@ -52,12 +60,70 @@ export interface TaxEstimateResult {
   financeCostsPence: number;
   financeCostTaxReductionPence: number;
   propertyAllowanceUsedPence: number;
+  /** £12,570 personal allowance applied (with taper) — distinct from the £1,000 property allowance. */
+  personalAllowanceUsedPence: number;
   taxableProfitPence: number;
   estimatedTaxPence: number;
+  /** Per-band breakdown of the income-tax charge (empty for companies / flat-band mode). */
+  bandSlices: TaxBandSlice[];
+  /** True when the charge was computed progressively (personal allowance + bands). */
+  progressive: boolean;
+  /** estimatedTax ÷ taxableProfit (0 when no profit) — the blended effective rate. */
+  effectiveRate: number;
   usedPropertyAllowance: boolean;
+  /** Marginal band reached (progressive) or the explicit band chosen. */
   taxBand: TaxBand;
   landlordType: LandlordType;
   disclaimer: string;
+}
+
+/**
+ * Progressive UK income tax on a property profit treated as the *only* income:
+ * apply the personal allowance (with the £100k taper), then slice the remainder
+ * through the basic / higher / additional bands. This is the accurate
+ * property-only charge — used when no explicit marginal band is supplied.
+ */
+function computeProgressiveIncomeTax(
+  taxableProfitPence: number,
+  cfg: ReturnType<typeof getTaxYearConfig>,
+): {
+  taxPence: number;
+  personalAllowanceUsedPence: number;
+  slices: TaxBandSlice[];
+  marginalBand: TaxBand;
+} {
+  // Personal allowance, tapered £1 for every £2 of income over the threshold.
+  let personalAllowance = cfg.personalAllowancePence;
+  if (taxableProfitPence > cfg.personalAllowanceTaperThresholdPence) {
+    const excess = taxableProfitPence - cfg.personalAllowanceTaperThresholdPence;
+    personalAllowance = Math.max(0, personalAllowance - Math.floor(excess / 2));
+  }
+  const personalAllowanceUsed = Math.min(personalAllowance, Math.max(0, taxableProfitPence));
+  const taxable = Math.max(0, taxableProfitPence - personalAllowanceUsed);
+
+  // Band widths/thresholds expressed in *taxable* income (after the allowance).
+  const basicTop = cfg.basicRateLimitPence; // 20% up to here
+  const additionalStart = cfg.additionalRateThresholdPence; // 45% above here
+  const rates = cfg.incomeTaxBandRates;
+
+  const basicAmt = Math.min(taxable, basicTop);
+  const higherAmt = Math.max(0, Math.min(taxable, additionalStart) - basicTop);
+  const additionalAmt = Math.max(0, taxable - additionalStart);
+
+  const slices: TaxBandSlice[] = [];
+  const push = (band: TaxBand, amountPence: number) => {
+    if (amountPence > 0) {
+      slices.push({ band, amountPence, rate: rates[band], taxPence: Math.round(amountPence * rates[band]) });
+    }
+  };
+  push("BASIC", basicAmt);
+  push("HIGHER", higherAmt);
+  push("ADDITIONAL", additionalAmt);
+
+  const taxPence = slices.reduce((s, b) => s + b.taxPence, 0);
+  const marginalBand: TaxBand =
+    additionalAmt > 0 ? "ADDITIONAL" : higherAmt > 0 ? "HIGHER" : "BASIC";
+  return { taxPence, personalAllowanceUsedPence: personalAllowanceUsed, slices, marginalBand };
 }
 
 /**
@@ -129,10 +195,36 @@ export function computeTaxEstimate(
     }
   }
 
-  // Limited companies pay corporation tax; individuals pay at their marginal band.
-  const rate = isCompany ? cfg.corporationTaxRate : cfg.incomeTaxBandRates[taxBand];
-  const grossTax = Math.round(taxableProfit * rate);
+  // The income-tax (or corporation-tax) charge on the taxable profit:
+  //  - Limited companies: flat corporation tax.
+  //  - Individuals with an explicit band: flat at that band — the "I have other
+  //    income that already uses my allowance and lower bands" assumption.
+  //  - Individuals with no band (default): PROGRESSIVE — personal allowance + the
+  //    basic/higher/additional bands applied to property profit as the only
+  //    income. This is the accurate property-only burden.
+  const explicitBand = options.taxBand;
+  let grossTax: number;
+  let bandSlices: TaxBandSlice[] = [];
+  let personalAllowanceUsed = 0;
+  let progressive = false;
+  let resolvedBand: TaxBand = taxBand;
+
+  if (isCompany) {
+    grossTax = Math.round(taxableProfit * cfg.corporationTaxRate);
+  } else if (explicitBand) {
+    grossTax = Math.round(taxableProfit * cfg.incomeTaxBandRates[explicitBand]);
+    resolvedBand = explicitBand;
+  } else {
+    progressive = true;
+    const p = computeProgressiveIncomeTax(taxableProfit, cfg);
+    grossTax = p.taxPence;
+    bandSlices = p.slices;
+    personalAllowanceUsed = p.personalAllowanceUsedPence;
+    resolvedBand = p.marginalBand;
+  }
+
   const estimatedTax = Math.max(0, grossTax - financeCostTaxReduction);
+  const effectiveRate = taxableProfit > 0 ? estimatedTax / taxableProfit : 0;
 
   return {
     taxYear,
@@ -142,10 +234,14 @@ export function computeTaxEstimate(
     financeCostsPence: financeCosts,
     financeCostTaxReductionPence: financeCostTaxReduction,
     propertyAllowanceUsedPence: propertyAllowanceUsed,
+    personalAllowanceUsedPence: personalAllowanceUsed,
     taxableProfitPence: taxableProfit,
     estimatedTaxPence: estimatedTax,
+    bandSlices,
+    progressive,
+    effectiveRate,
     usedPropertyAllowance: useAllowance,
-    taxBand,
+    taxBand: resolvedBand,
     landlordType,
     disclaimer: TAX_DISCLAIMER,
   };

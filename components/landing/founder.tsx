@@ -15,7 +15,8 @@ export function Founder() {
             About the founder
           </p>
           <h2 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
-            Built by an engineer for his parents.
+            Built by an applied mathematician turned software developer for his
+            parents.
           </h2>
           <div className="mt-5 space-y-4 text-muted-foreground">
             <p>
@@ -25,15 +26,15 @@ export function Founder() {
             </p>
             <p>
               He saw his parents,{" "}
-              <span className="font-medium text-foreground">Roger and Anne</span>{" "}
-              — who are landlords — worry about compliance with the new Renter&apos;s
-              Rights Act and Making Tax Digital.
+              <span className="font-medium text-foreground">Roger and Ann</span>,
+              who are landlords, concerned about compliance with the new
+              Renter&apos;s Rights Act and Making Tax Digital.
             </p>
             <p>
               PropManage was developed to solve this exact problem, integrating
               compliance management, day-to-day property management, profit
               tracking, and financial analysis for those on buy-to-let mortgages —
-              making compliance with the new Making Tax Digital completely seamless.
+              making compliance with the new Making Tax Digital seamless.
             </p>
           </div>
         </div>

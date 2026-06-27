@@ -22,7 +22,7 @@ export function ProfitLossWidget({
   className?: string;
 }) {
   return (
-    <WidgetCard className={className}>
+    <WidgetCard href="/reports" linkLabel="View reports" className={className}>
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle>Profit &amp; Loss</CardTitle>

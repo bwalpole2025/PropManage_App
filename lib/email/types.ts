@@ -23,4 +23,29 @@ export interface EmailSender {
     body: string;
     href?: string | null;
   }): Promise<SendResult>;
+  /** Structured compliance alert (property / item / deadline / penalty + RAG). */
+  sendComplianceAlert(input: {
+    to: string;
+    name?: string | null;
+    subject: string;
+    tierLabel: string;
+    rag: "RED" | "AMBER" | "GREEN";
+    itemLabel: string;
+    propertyLabel: string;
+    deadlineText: string;
+    penalty: string;
+    href?: string | null;
+  }): Promise<SendResult>;
+  /** Period report digest (heading + metrics table + notes) for the account holder. */
+  sendReport(input: {
+    to: string;
+    name?: string | null;
+    subject: string;
+    heading: string;
+    periodLabel: string;
+    intro?: string;
+    metrics: { label: string; value: string }[];
+    notes?: string[];
+    href?: string | null;
+  }): Promise<SendResult>;
 }

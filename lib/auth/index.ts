@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { authenticator } from "otplib";
 import { z } from "zod";
 import { prisma } from "../db";
 import { fullName } from "../format";
@@ -8,6 +9,8 @@ import { fullName } from "../format";
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  // 6-digit TOTP code; only required when the user has 2FA enabled.
+  totp: z.string().optional(),
 });
 
 // No PrismaAdapter: we use Credentials + JWT sessions, so the adapter's
@@ -24,11 +27,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        totp: { label: "Authenticator code", type: "text" },
       },
       async authorize(raw) {
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
-        const { email, password } = parsed.data;
+        const { email, password, totp } = parsed.data;
 
         const user = await prisma.user.findUnique({
           where: { email: email.toLowerCase() },
@@ -37,6 +41,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
+
+        // Two-factor enforcement. This is the security boundary: even if the
+        // login UI is bypassed and credentials are POSTed directly, no session
+        // is issued for a 2FA-enabled user without a valid TOTP code.
+        if (user.twoFactorEnabled) {
+          const code = (totp ?? "").replace(/\D/g, "");
+          if (
+            !user.totpSecret ||
+            !code ||
+            !authenticator.verify({ token: code, secret: user.totpSecret })
+          ) {
+            return null;
+          }
+        }
 
         return {
           id: user.id,

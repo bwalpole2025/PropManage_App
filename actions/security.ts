@@ -12,8 +12,9 @@ export interface SecurityFormState {
 
 /**
  * Start TOTP enrolment: generate + store a secret (not yet enabled) and return
- * the otpauth URL so the client can render a QR code. Login-time enforcement is
- * intentionally NOT wired in this scaffold (see lib/auth/index.ts authorize()).
+ * the otpauth URL so the client can render a QR code. Once confirmed, login-time
+ * enforcement applies — see authorize() in lib/auth/index.ts (and the two-step
+ * prompt in loginAction), which require a valid TOTP code for 2FA-enabled users.
  */
 export async function beginTotpEnrollmentAction(): Promise<{
   otpauthUrl: string;

@@ -22,7 +22,7 @@ const txn = (category: Sa105Category, amountPence: number): ApportionTxn => ({
 });
 
 describe("tax engine — acceptance behaviours", () => {
-  it("outputs taxable income, allowable expenses and an estimate for a property", () => {
+  it("outputs taxable income, allowable expenses and a property-only estimate", () => {
     const r = computeTaxEstimate(YEAR, [
       txn(Sa105Category.RENT_INCOME, 1_200_000),
       txn(Sa105Category.REPAIRS_MAINTENANCE, 200_000),
@@ -30,7 +30,45 @@ describe("tax engine — acceptance behaviours", () => {
     expect(r.totalIncomePence).toBe(1_200_000);
     expect(r.totalAllowableExpensesPence).toBe(200_000);
     expect(r.taxableProfitPence).toBe(1_000_000);
-    expect(r.estimatedTaxPence).toBe(200_000); // 20% of £10,000
+    // Property treated as the only income: £10,000 profit < £12,570 personal
+    // allowance ⇒ no tax (the old flat 20%-of-everything was an over-estimate).
+    expect(r.progressive).toBe(true);
+    expect(r.personalAllowanceUsedPence).toBe(1_000_000);
+    expect(r.estimatedTaxPence).toBe(0);
+  });
+
+  it("applies the personal allowance then the basic rate (progressive)", () => {
+    // £30,000 profit: £12,570 tax-free, £17,430 @ 20% = £3,486.
+    const r = computeTaxEstimate(YEAR, [txn(Sa105Category.RENT_INCOME, 3_000_000)]);
+    expect(r.personalAllowanceUsedPence).toBe(1_257_000);
+    expect(r.estimatedTaxPence).toBe(348_600);
+    expect(r.taxBand).toBe("BASIC");
+  });
+
+  it("crosses into the higher-rate band progressively", () => {
+    // £60,000 profit: PA £12,570; £37,700 @ 20% (£7,540) + £9,730 @ 40% (£3,892).
+    const r = computeTaxEstimate(YEAR, [txn(Sa105Category.RENT_INCOME, 6_000_000)]);
+    expect(r.estimatedTaxPence).toBe(1_143_200);
+    expect(r.taxBand).toBe("HIGHER");
+    expect(r.bandSlices.map((s) => s.band)).toEqual(["BASIC", "HIGHER"]);
+  });
+
+  it("tapers the personal allowance over £100k and reaches the additional rate", () => {
+    // £150,000 profit: PA tapered to £0; 37,700@20 + 87,440@40 + 24,860@45 = £53,703.
+    const r = computeTaxEstimate(YEAR, [txn(Sa105Category.RENT_INCOME, 15_000_000)]);
+    expect(r.personalAllowanceUsedPence).toBe(0);
+    expect(r.estimatedTaxPence).toBe(5_370_300);
+    expect(r.taxBand).toBe("ADDITIONAL");
+  });
+
+  it("honours an explicit marginal band as a flat rate (other income assumed)", () => {
+    // With a band chosen, the property profit is taxed flat at that rate (no PA).
+    const r = computeTaxEstimate(YEAR, [txn(Sa105Category.RENT_INCOME, 3_000_000)], {
+      taxBand: "BASIC",
+    });
+    expect(r.progressive).toBe(false);
+    expect(r.personalAllowanceUsedPence).toBe(0);
+    expect(r.estimatedTaxPence).toBe(600_000); // 20% of £30,000
   });
 
   it("changing a transaction's category changes the result", () => {

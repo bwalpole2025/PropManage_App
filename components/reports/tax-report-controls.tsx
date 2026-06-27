@@ -35,16 +35,18 @@ export function TaxReportControls({ years }: { years: string[] }) {
         </Select>
       </div>
       <div>
-        <Label htmlFor="band">Marginal rate</Label>
+        <Label htmlFor="band">Other income</Label>
         <Select
           id="band"
           className="h-9 w-auto"
-          value={params.get("band") ?? "BASIC"}
+          value={params.get("band") ?? ""}
           onChange={(e) => update("band", e.target.value)}
+          title="Default treats property profit as your only income (personal allowance + progressive bands). Pick a band if other income already uses your allowance / lower bands."
         >
+          <option value="">None — property only</option>
           {bands.map((b) => (
             <option key={b} value={b}>
-              {TaxBandLabel[b]}
+              At {TaxBandLabel[b]}
             </option>
           ))}
         </Select>

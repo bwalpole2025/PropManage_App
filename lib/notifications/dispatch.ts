@@ -7,16 +7,15 @@
 //   2. resolves the enabled channels from the account's preferences
 //      (`resolveDeliveryChannels` — the intersection of category × channel);
 //   3. delivers to each enabled channel exactly once per recipient (in-app row,
-//      email, mobile/push), recipients being principal ∪ ACTIVE members.
+//      email), recipients being principal ∪ ACTIVE members.
 //
 // This is what makes the acceptance criterion hold: a single event yields one
-// in-app + one email + one push (for the configured channels), and disabling a
-// channel or its category removes that delivery.
+// in-app + one email (for the configured channels), and disabling a channel or
+// its category removes that delivery.
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { emailSender } from "@/lib/email";
-import { sendPush } from "@/lib/push";
 import { MembershipStatus } from "@/lib/enums";
 import {
   NotificationChannel,
@@ -42,6 +41,31 @@ export interface NotifyEvent {
    * fire on every call.
    */
   dedupKey?: string;
+  /**
+   * When present, the email channel renders the richer, structured compliance
+   * template (property / item / deadline / penalty + RAG accent) instead of the
+   * generic operational alert. The in-app row still uses `title`/`body`.
+   */
+  compliance?: {
+    tierLabel: string;
+    rag: "RED" | "AMBER" | "GREEN";
+    itemLabel: string;
+    propertyLabel: string;
+    deadlineText: string;
+    penalty: string;
+  };
+  /**
+   * When present, the email channel renders the structured report digest (a
+   * period heading + metrics table + notes) instead of the generic operational
+   * alert. The in-app row still uses `title`/`body`.
+   */
+  report?: {
+    heading: string;
+    periodLabel: string;
+    intro?: string;
+    metrics: { label: string; value: string }[];
+    notes?: string[];
+  };
 }
 
 export interface DispatchResult {
@@ -50,7 +74,6 @@ export interface DispatchResult {
   channels: NotificationChannel[];
   inApp: number;
   email: number;
-  push: number;
 }
 
 const SKIPPED: DispatchResult = {
@@ -58,7 +81,6 @@ const SKIPPED: DispatchResult = {
   channels: [],
   inApp: 0,
   email: 0,
-  push: 0,
 };
 
 function isUniqueViolation(e: unknown): boolean {
@@ -69,31 +91,23 @@ interface Recipient {
   userId: string;
   email: string | null;
   firstName: string | null;
-  mobile: string | null;
-  mobileVerified: boolean;
 }
 
 const recipientSelect = {
   id: true,
   email: true,
   firstName: true,
-  mobile: true,
-  mobileVerified: true,
 } as const;
 
 function toRecipient(u: {
   id: string;
   email: string | null;
   firstName: string | null;
-  mobile: string | null;
-  mobileVerified: boolean;
 }): Recipient {
   return {
     userId: u.id,
     email: u.email,
     firstName: u.firstName,
-    mobile: u.mobile,
-    mobileVerified: u.mobileVerified,
   };
 }
 
@@ -153,7 +167,7 @@ export async function dispatchNotification(
   // Category (or all channels) disabled → suppressed. The dedup row already
   // records this as handled so we never retry it.
   if (channels.length === 0) {
-    return { delivered: true, channels: [], inApp: 0, email: 0, push: 0 };
+    return { delivered: true, channels: [], inApp: 0, email: 0 };
   }
 
   const recipients = await loadRecipients(event.accountId);
@@ -162,7 +176,6 @@ export async function dispatchNotification(
 
   let inApp = 0;
   let email = 0;
-  let push = 0;
 
   if (channels.includes(NotificationChannel.inApp)) {
     if (recipients.length === 0) {
@@ -194,28 +207,33 @@ export async function dispatchNotification(
   if (channels.includes(NotificationChannel.email)) {
     for (const r of recipients) {
       if (!r.email) continue;
-      await emailSender.sendOperationalAlert({
-        to: r.email,
-        name: r.firstName,
-        subject: emailSubject,
-        heading: event.title,
-        body: emailBody,
-        href: event.href ?? null,
-      });
+      if (event.report) {
+        await emailSender.sendReport({
+          to: r.email,
+          name: r.firstName,
+          subject: emailSubject,
+          href: event.href ?? null,
+          ...event.report,
+        });
+      } else if (event.compliance) {
+        await emailSender.sendComplianceAlert({
+          to: r.email,
+          name: r.firstName,
+          subject: emailSubject,
+          href: event.href ?? null,
+          ...event.compliance,
+        });
+      } else {
+        await emailSender.sendOperationalAlert({
+          to: r.email,
+          name: r.firstName,
+          subject: emailSubject,
+          heading: event.title,
+          body: emailBody,
+          href: event.href ?? null,
+        });
+      }
       email++;
-    }
-  }
-
-  if (channels.includes(NotificationChannel.push)) {
-    for (const r of recipients) {
-      if (!r.mobile || !r.mobileVerified) continue;
-      await sendPush({
-        to: r.mobile,
-        title: event.title,
-        body: emailBody,
-        href: event.href ?? null,
-      });
-      push++;
     }
   }
 
@@ -232,5 +250,5 @@ export async function dispatchNotification(
     });
   }
 
-  return { delivered: true, channels, inApp, email, push };
+  return { delivered: true, channels, inApp, email };
 }

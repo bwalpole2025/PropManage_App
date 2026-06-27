@@ -59,15 +59,11 @@ describe("operational alert email + prefs gate", () => {
 // The acceptance criterion, at the level of the pure rule the dispatcher applies:
 // "exactly one reminder per configured channel; disabling a preference suppresses it."
 describe("resolveDeliveryChannels (per-channel delivery contract)", () => {
-  const ALL = [
-    NotificationChannel.inApp,
-    NotificationChannel.email,
-    NotificationChannel.push,
-  ];
+  const ALL = [NotificationChannel.inApp, NotificationChannel.email];
 
   it("delivers on every configured channel for an enabled category", () => {
     const prefs = parseNotificationPrefs({
-      channels: { inApp: true, email: true, push: true },
+      channels: { inApp: true, email: true },
     });
     const channels = resolveDeliveryChannels(
       prefs,
@@ -80,7 +76,7 @@ describe("resolveDeliveryChannels (per-channel delivery contract)", () => {
 
   it("disabling a single channel suppresses just that channel", () => {
     const prefs = parseNotificationPrefs({
-      channels: { inApp: true, email: false, push: true },
+      channels: { inApp: true, email: false },
     });
     const channels = resolveDeliveryChannels(
       prefs,
@@ -88,12 +84,11 @@ describe("resolveDeliveryChannels (per-channel delivery contract)", () => {
     );
     expect(channels).not.toContain(NotificationChannel.email);
     expect(channels).toContain(NotificationChannel.inApp);
-    expect(channels).toContain(NotificationChannel.push);
   });
 
   it("disabling the category suppresses delivery on all channels", () => {
     const prefs = parseNotificationPrefs({
-      channels: { inApp: true, email: true, push: true },
+      channels: { inApp: true, email: true },
       categories: { complianceReminders: false },
     });
     expect(
@@ -102,10 +97,10 @@ describe("resolveDeliveryChannels (per-channel delivery contract)", () => {
     // Other categories are unaffected.
     expect(
       resolveDeliveryChannels(prefs, NotificationCategory.rentAndArrears).length,
-    ).toBe(3);
+    ).toBe(2);
   });
 
-  it("the default prefs deliver compliance on in-app + email (push off by default)", () => {
+  it("the default prefs deliver compliance on in-app + email", () => {
     const channels = resolveDeliveryChannels(
       DEFAULT_NOTIFICATION_PREFS,
       NotificationCategory.complianceReminders,

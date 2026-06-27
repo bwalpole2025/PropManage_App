@@ -1,7 +1,9 @@
 import type { EmailSender, SendResult } from "./types";
 import {
+  complianceAlertEmail,
   operationalAlertEmail,
   passwordResetEmail,
+  reportEmail,
   verificationEmail,
   type RenderedEmail,
 } from "./templates";
@@ -77,5 +79,34 @@ export class MockEmailSender implements EmailSender {
         href: input.href,
       }),
     );
+  }
+
+  async sendComplianceAlert(input: {
+    to: string;
+    name?: string | null;
+    subject: string;
+    tierLabel: string;
+    rag: "RED" | "AMBER" | "GREEN";
+    itemLabel: string;
+    propertyLabel: string;
+    deadlineText: string;
+    penalty: string;
+    href?: string | null;
+  }): Promise<SendResult> {
+    return record(input.to, input.href ?? "", complianceAlertEmail(input));
+  }
+
+  async sendReport(input: {
+    to: string;
+    name?: string | null;
+    subject: string;
+    heading: string;
+    periodLabel: string;
+    intro?: string;
+    metrics: { label: string; value: string }[];
+    notes?: string[];
+    href?: string | null;
+  }): Promise<SendResult> {
+    return record(input.to, input.href ?? "", reportEmail(input));
   }
 }

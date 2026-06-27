@@ -6,41 +6,29 @@
 import { TxnDirection } from "@/lib/enums";
 import { categoryLabel, categoryTreatment, isKnownCategory } from "@/lib/categories";
 import type { ReportFilters } from "@/lib/reports/filters";
-import type { ReportColumn, ReportDocument, ReportRow } from "@/lib/reports/types";
-import {
-  bucketByMonth,
-  groupByCategory,
-  sumIn,
-  sumOut,
-} from "@/lib/reports/aggregate";
+import type { ReportDocument, ReportRow } from "@/lib/reports/types";
+import { bucketByMonth, sumIn, sumOut } from "@/lib/reports/aggregate";
 import {
   getReportEntity,
   getScopedTransactions,
   resolvePortfolioScope,
   type ScopedTxn,
 } from "./data";
-import { standardMeta, standardSubtitle } from "./_shared";
+import {
+  CATEGORY_DRILLDOWN_NOTE,
+  CATEGORY_TABLE_COLUMNS,
+  categoryRowsWithDetail,
+  propertyCell,
+  standardMeta,
+  standardSubtitle,
+} from "./_shared";
 
-const propertyCell = (t: ScopedTxn) => t.propertyLabel ?? "—";
 const dirLabel = (d: string) => (d === TxnDirection.INCOME ? "Income" : "Expense");
 const moneyIn = (t: ScopedTxn) => (t.direction === TxnDirection.INCOME ? t.amountPence : undefined);
 const moneyOut = (t: ScopedTxn) => (t.direction === TxnDirection.EXPENSE ? t.amountPence : undefined);
 
-const CATEGORY_TABLE_COLUMNS: ReportColumn[] = [
-  { key: "category", label: "Category" },
-  { key: "count", label: "Txns", type: "number" },
-  { key: "amount", label: "Amount", type: "currency" },
-];
-
-function categoryRows(txns: { amountPence: number; category: string | null }[]): {
-  rows: ReportRow[];
-  total: number;
-} {
-  const groups = groupByCategory(txns);
-  const rows = groups.map((g) => ({ category: g.label, count: g.count, amount: g.amountPence }));
-  const total = groups.reduce((s, g) => s + g.amountPence, 0);
-  return { rows, total };
-}
+// The "by category" roll-up (clickable parent rows + per-category transaction
+// drill-down) is shared with the other category reports — see ./_shared.
 
 async function fetchScope(entityId: string, filters: ReportFilters, extra?: {
   direction?: string;
@@ -158,8 +146,8 @@ export async function buildIncomeStatement(
 
   const incomeTxns = txns.filter(isOperatingIncome);
   const expenseTxns = txns.filter(isOperatingExpense);
-  const income = categoryRows(incomeTxns);
-  const expense = categoryRows(expenseTxns);
+  const income = categoryRowsWithDetail(incomeTxns);
+  const expense = categoryRowsWithDetail(expenseTxns);
   const netProfit = income.total - expense.total;
 
   return {
@@ -182,8 +170,10 @@ export async function buildIncomeStatement(
           {
             columns: CATEGORY_TABLE_COLUMNS,
             rows: income.rows,
+            rowDetails: income.rowDetails,
             totals: { category: "Total income", count: incomeTxns.length, amount: income.total },
             emptyText: "No operating income in this period.",
+            note: "Select a category to see the transactions behind it.",
           },
         ],
       },
@@ -193,15 +183,16 @@ export async function buildIncomeStatement(
           {
             columns: CATEGORY_TABLE_COLUMNS,
             rows: expense.rows,
+            rowDetails: expense.rowDetails,
             totals: { category: "Total expenses", count: expenseTxns.length, amount: expense.total },
             emptyText: "No operating expenses in this period.",
-            note: "Excludes debt service (mortgage interest) and capital expenditure, which are not operating costs.",
+            note: "Select a category to see the transactions behind it. Excludes debt service (mortgage interest) and capital expenditure, which are not operating costs.",
           },
         ],
       },
     ],
     disclaimer:
-      "Operating profit before debt service and capital. This is not a tax computation — see the Hammock Tax Statement for SA105 figures.",
+      "Operating profit before debt service and capital. This is not a tax computation — see the Tax Statement for SA105 figures.",
   };
 }
 
@@ -218,8 +209,8 @@ export async function buildNetCashflow(
 
   const incomeTxns = txns.filter((t) => t.direction === TxnDirection.INCOME);
   const expenseTxns = txns.filter((t) => t.direction === TxnDirection.EXPENSE);
-  const income = categoryRows(incomeTxns);
-  const expense = categoryRows(expenseTxns);
+  const income = categoryRowsWithDetail(incomeTxns);
+  const expense = categoryRowsWithDetail(expenseTxns);
   const net = income.total - expense.total;
 
   return {
@@ -242,8 +233,10 @@ export async function buildNetCashflow(
           {
             columns: CATEGORY_TABLE_COLUMNS,
             rows: income.rows,
+            rowDetails: income.rowDetails,
             totals: { category: "Total in", count: incomeTxns.length, amount: income.total },
             emptyText: "No income in this period.",
+            note: CATEGORY_DRILLDOWN_NOTE,
           },
         ],
       },
@@ -253,8 +246,10 @@ export async function buildNetCashflow(
           {
             columns: CATEGORY_TABLE_COLUMNS,
             rows: expense.rows,
+            rowDetails: expense.rowDetails,
             totals: { category: "Total out", count: expenseTxns.length, amount: expense.total },
             emptyText: "No expenses in this period.",
+            note: CATEGORY_DRILLDOWN_NOTE,
           },
         ],
       },

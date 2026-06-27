@@ -18,7 +18,7 @@ export function UpcomingPaymentsWidget({
   className?: string;
 }) {
   return (
-    <WidgetCard className={className}>
+    <WidgetCard href="/tenancies" linkLabel="View tenancies" className={className}>
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle>Upcoming Payments</CardTitle>

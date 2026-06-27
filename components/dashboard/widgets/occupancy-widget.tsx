@@ -19,7 +19,7 @@ export function OccupancyWidget({
   className?: string;
 }) {
   return (
-    <WidgetCard className={className}>
+    <WidgetCard href="/properties" linkLabel="View properties" className={className}>
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle>Occupancy</CardTitle>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { PricingCard } from "@/components/shared/pricing-card";
+import { PLAN_PRICE_PENCE } from "@/lib/subscription";
 
 const ANNUAL_DISCOUNT = 0.2; // 20% off annual plans
 
@@ -26,7 +27,9 @@ export function Pricing({ isAuthed }: { isAuthed: boolean }) {
   };
 
   const starter = priced(4.5);
-  const pro = priced(8.5);
+  // Pro price comes from the subscription module so the marketing page and the
+  // in-app Subscription settings tab always agree.
+  const pro = priced(PLAN_PRICE_PENCE / 100);
 
   return (
     <section

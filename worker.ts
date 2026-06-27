@@ -14,9 +14,11 @@
 import { jobs } from "@/lib/jobs";
 import { computeArrears } from "@/lib/jobs/handlers/computeArrears";
 import { sendComplianceReminders } from "@/lib/jobs/handlers/sendComplianceReminders";
+import { sendComplianceSlaWarnings } from "@/lib/jobs/handlers/sendComplianceSlaWarnings";
 import { sendRentReminders } from "@/lib/jobs/handlers/sendRentReminders";
 import { sendMtdReminders } from "@/lib/jobs/handlers/sendMtdReminders";
 import { sendBankConsentWarnings } from "@/lib/jobs/handlers/sendBankConsentWarnings";
+import { sendAccountReports } from "@/lib/jobs/handlers/sendAccountReports";
 import { pollBankFeed } from "@/lib/jobs/handlers/pollBankFeed";
 
 async function main() {
@@ -25,9 +27,11 @@ async function main() {
   // Register processors.
   jobs.process("computeArrears", computeArrears);
   jobs.process("sendComplianceReminders", sendComplianceReminders);
+  jobs.process("sendComplianceSlaWarnings", sendComplianceSlaWarnings);
   jobs.process("sendRentReminders", sendRentReminders);
   jobs.process("sendMtdReminders", sendMtdReminders);
   jobs.process("sendBankConsentWarnings", sendBankConsentWarnings);
+  jobs.process("sendAccountReports", sendAccountReports);
   jobs.process("pollBankFeed", pollBankFeed);
 
   // Schedule recurring sweeps. In-memory uses everyMs; BullMQ uses cron.
@@ -36,6 +40,11 @@ async function main() {
   await jobs.schedule("computeArrears", {}, { everyMs: 60_000, cron: "0 * * * *" });
   await jobs.schedule(
     "sendComplianceReminders",
+    {},
+    { everyMs: 3_600_000, cron: "0 * * * *" },
+  );
+  await jobs.schedule(
+    "sendComplianceSlaWarnings",
     {},
     { everyMs: 3_600_000, cron: "0 * * * *" },
   );
@@ -51,6 +60,13 @@ async function main() {
   );
   await jobs.schedule(
     "sendBankConsentWarnings",
+    {},
+    { everyMs: 3_600_000, cron: "0 * * * *" },
+  );
+  // Monthly account-holder report — hourly sweep, self-gated to the 1st of the
+  // month at the account-local send hour and deduped per month.
+  await jobs.schedule(
+    "sendAccountReports",
     {},
     { everyMs: 3_600_000, cron: "0 * * * *" },
   );

@@ -15,7 +15,6 @@ import {
 import {
   NOTIFICATION_CHANNELS,
   NOTIFICATION_CATEGORIES,
-  NotificationChannel,
   NotificationChannelLabel,
   NotificationChannelDescription,
   NotificationCategoryLabel,
@@ -28,12 +27,10 @@ import {
 export function NotificationsForm({
   initialMarketingOptIn,
   initialPrefs,
-  pushAvailable,
   canEdit,
 }: {
   initialMarketingOptIn: boolean;
   initialPrefs: NotificationPreferences;
-  pushAvailable: boolean;
   canEdit: boolean;
 }) {
   const [marketingOptIn, setMarketingOptIn] = useState(initialMarketingOptIn);
@@ -68,36 +65,27 @@ export function NotificationsForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {NOTIFICATION_CHANNELS.map((key) => {
-            const isPush = key === NotificationChannel.push;
-            return (
-              <div
-                key={key}
-                className="flex items-start justify-between gap-4 border-b border-border pb-4 last:border-0 last:pb-0"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    {NotificationChannelLabel[key]}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {NotificationChannelDescription[key]}
-                  </p>
-                  {isPush && prefs.channels.push && !pushAvailable ? (
-                    <p className="mt-1 text-xs text-amber-600">
-                      Add and verify a mobile number in your profile to receive
-                      push notifications.
-                    </p>
-                  ) : null}
-                </div>
-                <Switch
-                  checked={prefs.channels[key]}
-                  onCheckedChange={(v) => setChannel(key, v)}
-                  disabled={!canEdit}
-                  aria-label={NotificationChannelLabel[key]}
-                />
+          {NOTIFICATION_CHANNELS.map((key) => (
+            <div
+              key={key}
+              className="flex items-start justify-between gap-4 border-b border-border pb-4 last:border-0 last:pb-0"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {NotificationChannelLabel[key]}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {NotificationChannelDescription[key]}
+                </p>
               </div>
-            );
-          })}
+              <Switch
+                checked={prefs.channels[key]}
+                onCheckedChange={(v) => setChannel(key, v)}
+                disabled={!canEdit}
+                aria-label={NotificationChannelLabel[key]}
+              />
+            </div>
+          ))}
         </CardContent>
       </Card>
 

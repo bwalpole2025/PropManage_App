@@ -11,7 +11,6 @@ export default async function NotificationsSettingsPage() {
     select: {
       marketingOptIn: true,
       notificationPrefs: true,
-      principal: { select: { mobileVerified: true } },
     },
   });
 
@@ -19,8 +18,6 @@ export default async function NotificationsSettingsPage() {
     <NotificationsForm
       initialMarketingOptIn={account.marketingOptIn}
       initialPrefs={parseNotificationPrefs(account.notificationPrefs)}
-      // Push delivers to a verified mobile; surface a hint when none is set up.
-      pushAvailable={account.principal.mobileVerified}
       canEdit={can(ctx.role, Capability.MANAGE_BILLING)}
     />
   );

@@ -20,7 +20,7 @@ export function ComplianceWidget({
   className?: string;
 }) {
   return (
-    <WidgetCard className={className}>
+    <WidgetCard href="/compliance" linkLabel="View compliance" className={className}>
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle>Compliance reminders</CardTitle>

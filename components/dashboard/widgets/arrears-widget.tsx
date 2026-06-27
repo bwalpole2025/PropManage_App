@@ -24,7 +24,7 @@ export function ArrearsWidget({
 }) {
   const empty = arrears.length === 0 && untracked.length === 0;
   return (
-    <WidgetCard className={className}>
+    <WidgetCard href="/tenancies" linkLabel="View tenancies" className={className}>
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle>Missing rent &amp; arrears</CardTitle>

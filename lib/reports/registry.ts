@@ -156,7 +156,7 @@ export const REPORTS: ReportMeta[] = [
   },
   {
     slug: "tax-statement",
-    title: "Hammock Tax Statement",
+    title: "Tax Statement",
     short: "Taxable income and allowable expenses in line with SA105.",
     description:
       "Your SA105-aligned tax statement — income, allowable expenses, the finance-cost reducer and per-owner figures.",

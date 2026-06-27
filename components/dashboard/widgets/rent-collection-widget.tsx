@@ -26,7 +26,7 @@ export function RentCollectionWidget({
         ? "warning"
         : "danger";
   return (
-    <WidgetCard className={className}>
+    <WidgetCard href="/transactions" linkLabel="View transactions" className={className}>
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle>Rent Collection</CardTitle>

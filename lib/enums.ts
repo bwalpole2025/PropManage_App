@@ -198,8 +198,15 @@ export const NotificationKind = {
   RENT_OVERDUE: "RENT_OVERDUE",
   RENT_UPCOMING: "RENT_UPCOMING",
   COMPLIANCE_EXPIRY: "COMPLIANCE_EXPIRY",
+  COMPLIANCE_OVERDUE: "COMPLIANCE_OVERDUE",
+  RIGHT_TO_RENT_EXPIRY: "RIGHT_TO_RENT_EXPIRY",
+  DEPOSIT_PROTECTION_DUE: "DEPOSIT_PROTECTION_DUE",
+  HAZARD_SLA: "HAZARD_SLA",
+  PET_REQUEST_SLA: "PET_REQUEST_SLA",
+  REGISTRATION_RENEWAL: "REGISTRATION_RENEWAL",
   MTD_DEADLINE: "MTD_DEADLINE",
   BANK_CONSENT_EXPIRY: "BANK_CONSENT_EXPIRY",
+  MONTHLY_REPORT: "MONTHLY_REPORT",
   REMINDER: "REMINDER",
 } as const;
 export type NotificationKind =
@@ -210,8 +217,15 @@ export const NotificationKindLabel: Record<NotificationKind, string> = {
   RENT_OVERDUE: "Rent overdue",
   RENT_UPCOMING: "Rent due soon",
   COMPLIANCE_EXPIRY: "Document expiring",
+  COMPLIANCE_OVERDUE: "Compliance breach",
+  RIGHT_TO_RENT_EXPIRY: "Right to Rent expiring",
+  DEPOSIT_PROTECTION_DUE: "Deposit protection due",
+  HAZARD_SLA: "Hazard repair deadline",
+  PET_REQUEST_SLA: "Pet request deadline",
+  REGISTRATION_RENEWAL: "Registration renewal due",
   MTD_DEADLINE: "MTD deadline approaching",
   BANK_CONSENT_EXPIRY: "Bank connection expiring",
+  MONTHLY_REPORT: "Monthly report",
   REMINDER: "Reminder",
 };
 
@@ -526,6 +540,182 @@ export const ImportantDateKindLabel: Record<ImportantDateKind, string> = {
   MORTGAGE_FIX_END: "Mortgage fix ends",
   INSPECTION: "Inspection",
   CUSTOM: "Custom",
+};
+
+// ---------------------------------------------------------------------------
+// Renters' Rights Act 2025 — compliance enums
+// ---------------------------------------------------------------------------
+
+// Tenancy regime. The RRA abolishes fixed terms: new tenancies are Assured
+// Periodic. LEGACY_FIXED exists only to label imported pre-RRA agreements.
+export const TenancyAgreementType = {
+  ASSURED_PERIODIC: "ASSURED_PERIODIC",
+  LEGACY_FIXED: "LEGACY_FIXED",
+} as const;
+export type TenancyAgreementType =
+  (typeof TenancyAgreementType)[keyof typeof TenancyAgreementType];
+export const TenancyAgreementTypeLabel: Record<TenancyAgreementType, string> = {
+  ASSURED_PERIODIC: "Assured periodic (RRA)",
+  LEGACY_FIXED: "Legacy fixed-term (pre-RRA)",
+};
+
+// Right to Rent immigration status for a tenant.
+export const RightToRentStatus = {
+  UNLIMITED: "UNLIMITED",
+  TIME_LIMITED: "TIME_LIMITED",
+  PENDING: "PENDING",
+} as const;
+export type RightToRentStatus =
+  (typeof RightToRentStatus)[keyof typeof RightToRentStatus];
+export const RightToRentStatusLabel: Record<RightToRentStatus, string> = {
+  UNLIMITED: "Unlimited right to rent",
+  TIME_LIMITED: "Time-limited (visa)",
+  PENDING: "Check pending",
+};
+
+// Private Rented Sector Database — per-property registration status.
+export const PrsdStatus = {
+  NOT_REGISTERED: "NOT_REGISTERED",
+  PENDING: "PENDING",
+  ACTIVE: "ACTIVE",
+} as const;
+export type PrsdStatus = (typeof PrsdStatus)[keyof typeof PrsdStatus];
+export const PrsdStatusLabel: Record<PrsdStatus, string> = {
+  NOT_REGISTERED: "Not registered",
+  PENDING: "Registration pending",
+  ACTIVE: "Registered",
+};
+
+// Landlord-level registration (PRS Ombudsman) status.
+export const RegistrationStatus = {
+  NOT_REGISTERED: "NOT_REGISTERED",
+  PENDING: "PENDING",
+  ACTIVE: "ACTIVE",
+  LAPSED: "LAPSED",
+} as const;
+export type RegistrationStatus =
+  (typeof RegistrationStatus)[keyof typeof RegistrationStatus];
+export const RegistrationStatusLabel: Record<RegistrationStatus, string> = {
+  NOT_REGISTERED: "Not registered",
+  PENDING: "Pending",
+  ACTIVE: "Active",
+  LAPSED: "Lapsed — renewal overdue",
+};
+
+// Section 13 rent-increase notice lifecycle.
+export const RentIncreaseStatus = {
+  SERVED: "SERVED",
+  EFFECTIVE: "EFFECTIVE",
+  WITHDRAWN: "WITHDRAWN",
+  TRIBUNAL_REFERRED: "TRIBUNAL_REFERRED",
+} as const;
+export type RentIncreaseStatus =
+  (typeof RentIncreaseStatus)[keyof typeof RentIncreaseStatus];
+export const RentIncreaseStatusLabel: Record<RentIncreaseStatus, string> = {
+  SERVED: "Notice served",
+  EFFECTIVE: "In effect",
+  WITHDRAWN: "Withdrawn",
+  TRIBUNAL_REFERRED: "Referred to tribunal",
+};
+
+// Hazard category (HHSRS-aligned, abbreviated to the common reportable kinds).
+export const HazardCategory = {
+  DAMP_MOULD: "DAMP_MOULD",
+  EXCESS_COLD: "EXCESS_COLD",
+  FIRE: "FIRE",
+  ELECTRICAL: "ELECTRICAL",
+  GAS_CO: "GAS_CO",
+  STRUCTURAL: "STRUCTURAL",
+  SANITATION: "SANITATION",
+  FALLS: "FALLS",
+  ASBESTOS: "ASBESTOS",
+  OTHER: "OTHER",
+} as const;
+export type HazardCategory =
+  (typeof HazardCategory)[keyof typeof HazardCategory];
+export const HazardCategoryLabel: Record<HazardCategory, string> = {
+  DAMP_MOULD: "Damp & mould",
+  EXCESS_COLD: "Excess cold",
+  FIRE: "Fire safety",
+  ELECTRICAL: "Electrical hazard",
+  GAS_CO: "Gas / carbon monoxide",
+  STRUCTURAL: "Structural / collapse",
+  SANITATION: "Sanitation & drainage",
+  FALLS: "Falls (stairs, baths, levels)",
+  ASBESTOS: "Asbestos",
+  OTHER: "Other hazard",
+};
+
+// Hazard severity tier — drives the Awaab's Law SLA windows (see
+// lib/compliance/awaab.ts). EMERGENCY = imminent risk (24h action).
+export const HazardSeverity = {
+  EMERGENCY: "EMERGENCY",
+  SIGNIFICANT: "SIGNIFICANT",
+  STANDARD: "STANDARD",
+} as const;
+export type HazardSeverity =
+  (typeof HazardSeverity)[keyof typeof HazardSeverity];
+export const HazardSeverityLabel: Record<HazardSeverity, string> = {
+  EMERGENCY: "Emergency (24h)",
+  SIGNIFICANT: "Significant",
+  STANDARD: "Standard",
+};
+
+export const HazardStatus = {
+  REPORTED: "REPORTED",
+  INVESTIGATING: "INVESTIGATING",
+  REPAIR_SCHEDULED: "REPAIR_SCHEDULED",
+  RESOLVED: "RESOLVED",
+  BREACHED: "BREACHED",
+} as const;
+export type HazardStatus = (typeof HazardStatus)[keyof typeof HazardStatus];
+export const HazardStatusLabel: Record<HazardStatus, string> = {
+  REPORTED: "Reported",
+  INVESTIGATING: "Investigating",
+  REPAIR_SCHEDULED: "Repair scheduled",
+  RESOLVED: "Resolved",
+  BREACHED: "SLA breached",
+};
+
+export const HazardEventType = {
+  REPORTED: "REPORTED",
+  INVESTIGATED: "INVESTIGATED",
+  SCHEDULED: "SCHEDULED",
+  RESOLVED: "RESOLVED",
+  NOTE: "NOTE",
+  BREACH: "BREACH",
+} as const;
+export type HazardEventType =
+  (typeof HazardEventType)[keyof typeof HazardEventType];
+
+export const PetRequestStatus = {
+  PENDING: "PENDING",
+  INFO_REQUESTED: "INFO_REQUESTED",
+  APPROVED: "APPROVED",
+  REFUSED: "REFUSED",
+  WITHDRAWN: "WITHDRAWN",
+} as const;
+export type PetRequestStatus =
+  (typeof PetRequestStatus)[keyof typeof PetRequestStatus];
+export const PetRequestStatusLabel: Record<PetRequestStatus, string> = {
+  PENDING: "Awaiting decision",
+  INFO_REQUESTED: "More information requested",
+  APPROVED: "Approved",
+  REFUSED: "Refused",
+  WITHDRAWN: "Withdrawn",
+};
+
+// RAG (Red/Amber/Green) status used across the compliance dashboard + services.
+export const ComplianceRag = {
+  GREEN: "GREEN",
+  AMBER: "AMBER",
+  RED: "RED",
+} as const;
+export type ComplianceRag = (typeof ComplianceRag)[keyof typeof ComplianceRag];
+export const ComplianceRagLabel: Record<ComplianceRag, string> = {
+  GREEN: "Compliant",
+  AMBER: "Action soon",
+  RED: "Action required",
 };
 
 export const MtdStatus = {

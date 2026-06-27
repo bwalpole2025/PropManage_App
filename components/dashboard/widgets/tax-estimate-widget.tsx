@@ -21,7 +21,7 @@ export function TaxEstimateWidget({
   className?: string;
 }) {
   return (
-    <WidgetCard className={className}>
+    <WidgetCard href="/tax" linkLabel="View tax breakdown" className={className}>
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle>Tax estimate</CardTitle>

@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { OnboardingChecklist } from "@/components/shared/onboarding-checklist";
 import { OverviewHelpMenu } from "@/components/dashboard/help-menu";
 import { HelpBanner } from "@/components/dashboard/help-banner";
+import { QuickNav } from "@/components/dashboard/quick-nav";
 import { ProfitLossWidget } from "@/components/dashboard/widgets/profit-loss-widget";
 import { AssetAnalysisWidget } from "@/components/dashboard/widgets/asset-analysis-widget";
 import { OccupancyWidget } from "@/components/dashboard/widgets/occupancy-widget";
@@ -72,6 +73,8 @@ export default async function DashboardPage() {
       />
 
       <HelpBanner />
+
+      <QuickNav />
 
       <OnboardingChecklist
         steps={steps}
