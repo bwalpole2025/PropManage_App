@@ -1,4 +1,5 @@
 "use server";
+import { toClientError } from "@/lib/errors";
 
 import { prisma, type PrismaTx } from "@/lib/db";
 import {
@@ -113,6 +114,6 @@ export async function updateTenancyAction(
     revalidateTenancy(tenancy.propertyId);
     return { ok: true, at: Date.now() };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }

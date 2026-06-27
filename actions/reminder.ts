@@ -1,4 +1,5 @@
 "use server";
+import { toClientError } from "@/lib/errors";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -64,7 +65,7 @@ export async function createReminderAction(
     revalidateReminders();
     return { ok: true, at: Date.now() };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }
 
@@ -86,7 +87,7 @@ async function setStatus(
     revalidateReminders();
     return { ok: true };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }
 
@@ -111,7 +112,7 @@ export async function deleteReminderAction(
     revalidateReminders();
     return { ok: true };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }
 
@@ -130,6 +131,6 @@ export async function clearCompletedRemindersAction(): Promise<{
     revalidateReminders();
     return { ok: true, count: res.count };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }

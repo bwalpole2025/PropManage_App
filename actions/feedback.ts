@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { emailSender } from "@/lib/email";
 import { getSessionUser } from "@/lib/auth/active-org";
+import { enforceRateLimit, clientIp } from "@/lib/rate-limit";
 
 export interface FeedbackState {
   ok?: boolean;
@@ -37,6 +38,13 @@ export async function sendFeedbackAction(
   }
 
   const user = await getSessionUser();
+  const limited = await enforceRateLimit(
+    `feedback:${user?.id ?? (await clientIp())}`,
+    5,
+    3600,
+    "Thanks for all the feedback! Please try again a little later.",
+  );
+  if (limited) return { error: limited };
   const from = user?.email ?? "anonymous";
   const { kind, message, page } = parsed.data;
 

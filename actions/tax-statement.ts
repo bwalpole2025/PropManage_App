@@ -1,4 +1,5 @@
 "use server";
+import { toClientError } from "@/lib/errors";
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -39,7 +40,7 @@ export async function acceptTaxDisclaimerAction(
     revalidatePath("/tax");
     return { ok: true, at: Date.now() };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }
 
@@ -78,6 +79,6 @@ export async function createTaxStatementAction(
     revalidatePath("/tax");
     return { ok: true, at: Date.now() };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }

@@ -1,18 +1,21 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("auth smoke", () => {
-  test("unauthenticated /dashboard redirects to /login", async ({ page }) => {
+  test("unauthenticated /dashboard redirects to the closed-beta sign in", async ({
+    page,
+  }) => {
     await page.goto("/dashboard");
-    await expect(page).toHaveURL(/\/login/);
+    // The closed-beta middleware sends unauthenticated traffic to /beta-access.
+    await expect(page).toHaveURL(/\/beta-access/);
     await expect(
-      page.getByRole("heading", { name: "Welcome back" }),
+      page.getByRole("heading", { name: "Beta tester sign in" }),
     ).toBeVisible();
   });
 
   test("seeded landlord logs in and the protected dashboard renders", async ({
     page,
   }) => {
-    await page.goto("/login");
+    await page.goto("/beta-access");
 
     // The login form is pre-filled; set values explicitly for robustness.
     await page.fill('input[name="email"]', "landlord@example.com");

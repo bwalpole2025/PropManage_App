@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { services } from "@/lib/services";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
+import { assertValidUpload, normalizeMime } from "@/lib/uploads";
 
 /**
  * Upload a document/receipt to DocumentStorage and record a FileObject. Can
@@ -17,9 +18,8 @@ export async function uploadFileAction(formData: FormData) {
   const { user } = await requireEntityAccess(entityId, Capability.MANAGE_FILES);
 
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    throw new Error("No file provided");
-  }
+  assertValidUpload(file);
+  const mimeType = normalizeMime(file.type);
   const propertyId = (formData.get("propertyId") as string) || null;
   const complianceDocId = (formData.get("complianceDocId") as string) || null;
   const transactionId = (formData.get("transactionId") as string) || null;
@@ -36,18 +36,14 @@ export async function uploadFileAction(formData: FormData) {
   const bytes = Buffer.from(await file.arrayBuffer());
   const safeName = file.name.replace(/[^\w.-]+/g, "_");
   const key = `${entityId}/${randomUUID()}-${safeName}`;
-  const { sizeBytes } = await services.storage.put(
-    key,
-    bytes,
-    file.type || "application/octet-stream",
-  );
+  const { sizeBytes } = await services.storage.put(key, bytes, mimeType);
 
   const record = await prisma.fileObject.create({
     data: {
       accountId: entityId,
       propertyId,
       filename: file.name,
-      mimeType: file.type || "application/octet-stream",
+      mimeType,
       sizeBytes,
       storageKey: key,
       uploadedByUserId: user.id,

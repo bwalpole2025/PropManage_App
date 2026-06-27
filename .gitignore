@@ -11,9 +11,11 @@ next-env.d.ts
 # production
 /build
 
-# env
+# env — ignore every .env variant (incl. .env.production / .env.development),
+# but keep the committed example.
 .env
-.env*.local
+.env.*
+!.env.example
 
 # database (local sqlite)
 /prisma/*.db

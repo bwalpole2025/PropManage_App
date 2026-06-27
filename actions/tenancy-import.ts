@@ -1,4 +1,5 @@
 "use server";
+import { toClientError } from "@/lib/errors";
 
 import { prisma } from "@/lib/db";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
@@ -91,7 +92,7 @@ export async function commitTenancyImportAction(
       });
       result.created++;
     } catch (e) {
-      result.errors.push({ row: v.rowNumber, message: (e as Error).message });
+      result.errors.push({ row: v.rowNumber, message: toClientError(e) });
     }
   }
 

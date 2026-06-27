@@ -1,4 +1,5 @@
 "use server";
+import { toClientError } from "@/lib/errors";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -153,6 +154,6 @@ export async function assignOwnershipAction(
     revalidatePath("/properties", "layout");
     return { ok: true };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }

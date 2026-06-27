@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { signIn } from "@/lib/auth";
+import { isBetaAllowed } from "@/lib/auth/beta-allowlist";
 import { requireUser } from "@/lib/auth/active-org";
 import {
   createEmailVerifyToken,
@@ -15,13 +16,8 @@ import {
 } from "@/lib/auth/tokens";
 import { emailSender } from "@/lib/email";
 import { fullName } from "@/lib/format";
+import { enforceRateLimit, clientIp } from "@/lib/rate-limit";
 import { forgotPasswordSchema, resetPasswordSchema } from "@/schemas/auth";
-import {
-  LandlordType,
-  MembershipRole,
-  MembershipStatus,
-  UserRole,
-} from "@/lib/enums";
 
 export interface AuthFormState {
   error?: string;
@@ -49,10 +45,30 @@ export async function loginAction(
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
-    code: formData.get("code"),
+    // Absent when 2FA isn't being prompted; coerce null -> undefined so the
+    // optional code field validates for a normal (non-2FA) sign-in.
+    code: formData.get("code") ?? undefined,
   });
   if (!parsed.success) return { error: "Enter a valid email and password." };
   const { email, password, code } = parsed.data;
+
+  // Throttle sign-in attempts (brute-force / credential-stuffing): per source IP
+  // and per target email. Counts before the password check so failed guesses are
+  // limited regardless of outcome.
+  const ip = await clientIp();
+  const limited =
+    (await enforceRateLimit(`login:ip:${ip}`, 10, 300)) ??
+    (await enforceRateLimit(`login:email:${email.toLowerCase()}`, 5, 900));
+  if (limited) return { error: limited };
+
+  // Closed-beta gate. Reject any email that isn't on the BETA_TESTER_EMAILS
+  // allowlist up front, with a clear 403-style message for unauthorised testers
+  // who find the hidden /beta-access route. (authorize() enforces this again.)
+  if (!isBetaAllowed(email)) {
+    return {
+      error: "403 — This email isn't part of the PropManage closed beta.",
+    };
+  }
 
   // Verify the password first so we can decide whether to prompt for a 2FA code
   // without revealing 2FA status for a wrong password. The TOTP code itself is
@@ -97,106 +113,17 @@ export async function loginAction(
   return {};
 }
 
-const registerSchema = z.object({
-  name: z.string().min(1, "Enter your name"),
-  email: z.string().email("Enter a valid email"),
-  password: z.string().min(8, "Use at least 8 characters"),
-  entityName: z.string().min(1, "Enter a portfolio name"),
-  entityType: z.enum([
-    LandlordType.INDIVIDUAL,
-    LandlordType.PORTFOLIO,
-    LandlordType.LIMITED_COMPANY,
-  ]),
-});
-
+// Public sign-ups are disabled during the closed beta — PropManage is
+// invite-only. Access is granted by adding an email to BETA_TESTER_EMAILS, never
+// by self-registration, so this action always refuses. Disabling it here (not
+// just hiding the /register page) keeps a direct POST from creating an account.
 export async function registerAction(
   _prev: AuthFormState,
-  formData: FormData,
+  _formData: FormData,
 ): Promise<AuthFormState> {
-  const parsed = registerSchema.safeParse({
-    name: formData.get("name"),
-    email: formData.get("email"),
-    password: formData.get("password"),
-    entityName: formData.get("entityName"),
-    entityType: formData.get("entityType"),
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Check the form." };
-  }
-  const { name, email, password, entityName, entityType } = parsed.data;
-
-  const existing = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
-  });
-  if (existing) return { error: "An account with that email already exists." };
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  const [firstName, ...rest] = name.trim().split(/\s+/);
-  const lastName = rest.join(" ") || null;
-
-  // Create the user, their first Account (with a default portfolio), and an
-  // OWNER membership.
-  await prisma.user.create({
-    data: {
-      firstName,
-      lastName,
-      email: email.toLowerCase(),
-      passwordHash,
-      role: UserRole.OWNER,
-      ownedEntities: {
-        create: {
-          displayName: entityName,
-          type: entityType,
-          portfolios: {
-            create: {
-              name: "Personal — Default",
-              type: "personal",
-              isDefault: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  // The entity was created via nested write; attach the OWNER membership.
-  const user = await prisma.user.findUniqueOrThrow({
-    where: { email: email.toLowerCase() },
-    include: { ownedEntities: true },
-  });
-  const entity = user.ownedEntities[0];
-  await prisma.membership.create({
-    data: {
-      userId: user.id,
-      accountId: entity.id,
-      role: MembershipRole.OWNER,
-      status: MembershipStatus.ACTIVE,
-      acceptedAt: new Date(),
-    },
-  });
-
-  // Send the welcome/verification email (new users land unverified; they can
-  // resend it from Settings). Best-effort — don't block sign-up on email errors.
-  try {
-    const raw = await createEmailVerifyToken(user.id);
-    await emailSender.sendVerificationEmail({
-      to: user.email,
-      name: fullName(user),
-      verifyUrl: `${appBaseUrl()}/verify-email/${raw}`,
-    });
-  } catch {
-    /* ignore email failures during sign-up */
-  }
-
-  try {
-    await signIn("credentials", { email, password, redirectTo: "/dashboard" });
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return { error: "Account created — please sign in." };
-    }
-    throw error;
-  }
-  return {};
+  return {
+    error: "Public sign-ups are closed during the PropManage closed beta.",
+  };
 }
 
 export async function logoutAction() {
@@ -211,6 +138,13 @@ export async function logoutAction() {
 /** Send (or resend) a verification email to the current user. */
 export async function requestEmailVerificationAction(): Promise<AuthFormState> {
   const sessionUser = await requireUser();
+  const limited = await enforceRateLimit(
+    `emailverify:${sessionUser.id}`,
+    3,
+    3600,
+    "You've requested too many verification emails. Please wait a while.",
+  );
+  if (limited) return { error: limited };
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: sessionUser.id },
   });
@@ -249,6 +183,18 @@ export async function requestPasswordResetAction(
 ): Promise<AuthFormState> {
   const parsed = forgotPasswordSchema.safeParse({ email: formData.get("email") });
   if (!parsed.success) return { error: "Enter a valid email." };
+
+  // Throttle reset emails (inbox flooding / Resend cost abuse): per IP and per
+  // target address. Unauthenticated endpoint, so this is the only guard.
+  const ip = await clientIp();
+  const limited =
+    (await enforceRateLimit(`pwreset:ip:${ip}`, 5, 3600)) ??
+    (await enforceRateLimit(
+      `pwreset:email:${parsed.data.email.toLowerCase()}`,
+      3,
+      3600,
+    ));
+  if (limited) return { error: limited };
 
   const user = await prisma.user.findUnique({
     where: { email: parsed.data.email.toLowerCase() },

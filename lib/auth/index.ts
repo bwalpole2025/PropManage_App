@@ -5,6 +5,8 @@ import { authenticator } from "otplib";
 import { z } from "zod";
 import { prisma } from "../db";
 import { fullName } from "../format";
+import { authConfig } from "./config";
+import { isBetaAllowed } from "./beta-allowlist";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -15,13 +17,10 @@ const credentialsSchema = z.object({
 
 // No PrismaAdapter: we use Credentials + JWT sessions, so the adapter's
 // AuthAccount/Session tables are not needed (the `authorize` callback does its
-// own user lookup).
+// own user lookup). Shares the edge-safe base in ./config; the heavy authorize
+// logic (bcrypt, prisma, otplib) lives here so the Edge middleware never imports it.
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  session: { strategy: "jwt" },
-  trustHost: true,
-  pages: {
-    signIn: "/login",
-  },
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -33,6 +32,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
         const { email, password, totp } = parsed.data;
+
+        // Closed-beta gate: only allowlisted emails may authenticate, however
+        // the credentials arrive (the /beta-access UI or a direct POST). This is
+        // the security boundary behind the hidden login.
+        if (!isBetaAllowed(email)) return null;
 
         const user = await prisma.user.findUnique({
           where: { email: email.toLowerCase() },
@@ -66,20 +70,4 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) {
-        token.uid = user.id;
-        token.role = (user as { role?: string }).role;
-      }
-      return token;
-    },
-    session({ session, token }) {
-      if (session.user) {
-        if (token.uid) session.user.id = token.uid as string;
-        if (token.role) session.user.role = token.role as string;
-      }
-      return session;
-    },
-  },
 });

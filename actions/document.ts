@@ -8,6 +8,8 @@ import { services } from "@/lib/services";
 import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
 import { createDocument } from "@/services/documents";
+import { assertValidUpload, normalizeMime } from "@/lib/uploads";
+import { toClientError } from "@/lib/errors";
 import { documentUploadSchema, customCategorySchema } from "@/schemas/document";
 
 export type DocumentActionState = { ok?: boolean; error?: string; at?: number };
@@ -45,10 +47,11 @@ export async function uploadDocumentAction(
     let fileId: string | null = null;
     const file = formData.get("file");
     if (file instanceof File && file.size > 0) {
+      assertValidUpload(file);
       const bytes = Buffer.from(await file.arrayBuffer());
       const safeName = file.name.replace(/[^\w.-]+/g, "_");
       const key = `${entityId}/${randomUUID()}-${safeName}`;
-      const mimeType = file.type || "application/octet-stream";
+      const mimeType = normalizeMime(file.type);
       const { sizeBytes } = await services.storage.put(key, bytes, mimeType);
       const rec = await prisma.fileObject.create({
         data: {
@@ -77,7 +80,7 @@ export async function uploadDocumentAction(
     revalidateDocuments(d.propertyId || null);
     return { ok: true, at: Date.now() };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }
 
@@ -111,7 +114,7 @@ export async function addCustomCategoryAction(
     revalidatePath("/files/documents");
     return { ok: true, at: Date.now() };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }
 
@@ -140,6 +143,6 @@ export async function deleteCustomCategoryAction(
     revalidatePath("/files/documents");
     return { ok: true };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }

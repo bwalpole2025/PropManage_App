@@ -1,19 +1,14 @@
+import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/active-org";
-import { Hero } from "@/components/landing/hero";
-import { Founder } from "@/components/landing/founder";
-import { Pricing } from "@/components/landing/pricing";
+import { ComingSoon } from "@/components/landing/coming-soon";
 
-// Public marketing landing page. Renders for everyone (no redirect); the CTAs
-// adapt to whether the visitor is signed in.
+// During the closed beta the public landing page is a "coming soon" banner with
+// no public sign-up or login. Beta testers reach the app through the hidden
+// /beta-access route; access is gated by the BETA_TESTER_EMAILS allowlist.
 export default async function HomePage() {
+  // An already-signed-in beta tester goes straight to their dashboard.
   const user = await getSessionUser();
-  const isAuthed = Boolean(user);
+  if (user) redirect("/dashboard");
 
-  return (
-    <main>
-      <Hero isAuthed={isAuthed} />
-      <Founder />
-      <Pricing isAuthed={isAuthed} />
-    </main>
-  );
+  return <ComingSoon />;
 }

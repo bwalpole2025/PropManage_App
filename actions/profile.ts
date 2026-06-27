@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/active-org";
 import { createMobileOtp, consumeMobileOtp } from "@/lib/auth/tokens";
 import { sendVerificationSms } from "@/lib/sms";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import {
   profileSchema,
   changePasswordSchema,
@@ -79,6 +80,13 @@ export async function startMobileVerificationAction(
   formData: FormData,
 ): Promise<ProfileFormState> {
   const user = await requireUser();
+  const limited = await enforceRateLimit(
+    `mobilesend:${user.id}`,
+    3,
+    3600,
+    "Too many code requests. Please wait a while before trying again.",
+  );
+  if (limited) return { error: limited };
   const parsed = mobileSchema.safeParse({ mobile: formData.get("mobile") });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Enter a valid number." };
@@ -98,6 +106,13 @@ export async function confirmMobileVerificationAction(
   formData: FormData,
 ): Promise<ProfileFormState> {
   const user = await requireUser();
+  const limited = await enforceRateLimit(
+    `mobileverify:${user.id}`,
+    5,
+    600,
+    "Too many incorrect codes. Request a new code and try again.",
+  );
+  if (limited) return { error: limited };
   const parsed = mobileCodeSchema.safeParse({ code: formData.get("code") });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Enter the code." };

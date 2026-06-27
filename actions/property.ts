@@ -1,4 +1,5 @@
 "use server";
+import { toClientError } from "@/lib/errors";
 
 import type { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
@@ -164,7 +165,7 @@ export async function createTenancyState(
     revalidateTenancy(parsed.data.propertyId);
     return { ok: true, at: Date.now() };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }
 
@@ -359,7 +360,7 @@ export async function updatePropertyAction(
     revalidatePath(`/properties/${propertyId}/epc`);
     return { ok: true };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }
 
@@ -392,7 +393,7 @@ export async function setPropertyCameraPositionAction(
     revalidatePath(`/properties/${propertyId}`);
     return { ok: true };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }
 
@@ -430,6 +431,6 @@ export async function createPropertyNoteAction(
     // clear+refresh effect on a second consecutive successful submit.
     return { ok: true, at: Date.now() };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
 }

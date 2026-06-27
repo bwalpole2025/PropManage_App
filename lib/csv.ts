@@ -75,7 +75,11 @@ export function parseCsv(text: string): string[][] {
 }
 
 function escapeCell(value: string | number): string {
-  const s = String(value ?? "");
+  let s = String(value ?? "");
+  // CSV / formula injection (CWE-1236): a cell beginning with = + - @ or a
+  // control char is treated as a formula by Excel/Sheets. Prefix a single quote
+  // so spreadsheets render it as literal text instead of executing it.
+  if (typeof value === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
