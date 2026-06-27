@@ -1,4 +1,5 @@
 "use server";
+import { toClientError } from "@/lib/errors";
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -151,7 +152,7 @@ export async function addTransactionAction(
   try {
     await createTransactionFromForm(entityId, formData, user.id);
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
   return { ok: true };
 }

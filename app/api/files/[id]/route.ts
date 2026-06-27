@@ -31,11 +31,21 @@ export async function GET(
   }
 
   const bytes = await services.storage.getBytes(file.storageKey);
+  // Defence in depth against a stored-XSS via an uploaded active document:
+  //  - nosniff stops the browser from re-interpreting the declared type;
+  //  - the sandbox CSP prevents any script/plugin execution even if an
+  //    HTML/SVG payload slipped past the upload allowlist (lib/uploads.ts);
+  //  - the filename is stripped of quotes/control chars so it can't break the
+  //    Content-Disposition header.
+  const safeFilename = file.filename.replace(/[^\w.\- ]+/g, "_");
   return new NextResponse(Buffer.from(bytes), {
     headers: {
       "Content-Type": file.mimeType,
-      "Content-Disposition": `inline; filename="${file.filename}"`,
+      "Content-Disposition": `inline; filename="${safeFilename}"`,
       "Content-Length": String(file.sizeBytes),
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+      "Cache-Control": "private, no-store",
     },
   });
 }

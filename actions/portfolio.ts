@@ -1,4 +1,5 @@
 "use server";
+import { toClientError } from "@/lib/errors";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -41,7 +42,7 @@ export async function createPortfolioAction(
       },
     });
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: toClientError(e) };
   }
   revalidatePath("/properties");
   return { ok: true };

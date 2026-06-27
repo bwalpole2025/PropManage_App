@@ -11,10 +11,11 @@ export function verificationEmail(input: {
   verifyUrl: string;
 }): RenderedEmail {
   const greeting = input.name ? `Hi ${input.name},` : "Hi,";
+  const greetingHtml = input.name ? `Hi ${esc(input.name)},` : "Hi,";
   return {
     subject: "Verify your PropManage email",
     text: `${greeting}\n\nConfirm your email address to finish setting up PropManage:\n${input.verifyUrl}\n\nIf you didn't create an account, you can ignore this email.`,
-    html: `<p>${greeting}</p><p>Confirm your email address to finish setting up PropManage:</p><p><a href="${input.verifyUrl}">Verify email</a></p>`,
+    html: `<p>${greetingHtml}</p><p>Confirm your email address to finish setting up PropManage:</p><p><a href="${esc(input.verifyUrl)}">Verify email</a></p>`,
   };
 }
 
@@ -26,14 +27,15 @@ export function operationalAlertEmail(input: {
   href?: string | null;
 }): RenderedEmail {
   const greeting = input.name ? `Hi ${input.name},` : "Hi,";
+  const greetingHtml = input.name ? `Hi ${esc(input.name)},` : "Hi,";
   const link = input.href ? `\n\nView in PropManage: ${input.href}` : "";
   const linkHtml = input.href
-    ? `<p><a href="${input.href}">View in PropManage</a></p>`
+    ? `<p><a href="${esc(input.href)}">View in PropManage</a></p>`
     : "";
   return {
     subject: input.subject,
     text: `${greeting}\n\n${input.body}${link}`,
-    html: `<p>${greeting}</p><p><strong>${input.heading}</strong></p><p>${input.body}</p>${linkHtml}`,
+    html: `<p>${greetingHtml}</p><p><strong>${esc(input.heading)}</strong></p><p>${esc(input.body)}</p>${linkHtml}`,
   };
 }
 
@@ -225,9 +227,10 @@ export function passwordResetEmail(input: {
   resetUrl: string;
 }): RenderedEmail {
   const greeting = input.name ? `Hi ${input.name},` : "Hi,";
+  const greetingHtml = input.name ? `Hi ${esc(input.name)},` : "Hi,";
   return {
     subject: "Reset your PropManage password",
     text: `${greeting}\n\nReset your password using the link below (valid for 1 hour):\n${input.resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
-    html: `<p>${greeting}</p><p>Reset your password using the link below (valid for 1 hour):</p><p><a href="${input.resetUrl}">Reset password</a></p>`,
+    html: `<p>${greetingHtml}</p><p>Reset your password using the link below (valid for 1 hour):</p><p><a href="${esc(input.resetUrl)}">Reset password</a></p>`,
   };
 }

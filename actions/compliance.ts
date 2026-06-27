@@ -1,4 +1,5 @@
 "use server";
+import { toClientError } from "@/lib/errors";
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -8,6 +9,7 @@ import { getActiveContext, requireEntityAccess } from "@/lib/auth/active-org";
 import { Capability } from "@/lib/auth/rbac";
 import { recordAudit } from "@/lib/audit";
 import { poundsToPence } from "@/lib/format";
+import { assertValidUpload, normalizeMime } from "@/lib/uploads";
 import {
   COMPLIANCE_CATEGORIES,
   DocumentCategory,
@@ -50,7 +52,7 @@ function toDate(value: string | undefined, label: string): Date | null {
 
 /** Map thrown errors to a friendly state (ComplianceError messages pass through). */
 function fail(e: unknown): ComplianceActionState {
-  return { error: (e as Error).message };
+  return { error: toClientError(e) };
 }
 
 function revalidateCompliance() {
@@ -393,20 +395,18 @@ export async function uploadCertificateAction(
     let fileId: string | null = null;
     const file = formData.get("file");
     if (file instanceof File && file.size > 0) {
+      assertValidUpload(file);
+      const mimeType = normalizeMime(file.type);
       const bytes = Buffer.from(await file.arrayBuffer());
       const safeName = file.name.replace(/[^\w.-]+/g, "_");
       const key = `${entityId}/${randomUUID()}-${safeName}`;
-      const { sizeBytes } = await services.storage.put(
-        key,
-        bytes,
-        file.type || "application/octet-stream",
-      );
+      const { sizeBytes } = await services.storage.put(key, bytes, mimeType);
       const fileObj = await prisma.fileObject.create({
         data: {
           accountId: entityId,
           propertyId,
           filename: file.name,
-          mimeType: file.type || "application/octet-stream",
+          mimeType,
           sizeBytes,
           storageKey: key,
           uploadedByUserId: user.id,
