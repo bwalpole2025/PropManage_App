@@ -56,6 +56,10 @@ export async function rateLimit(
   limit: number,
   windowSec: number,
 ): Promise<RateLimitResult> {
+  // Escape hatch for e2e / load tests where throttling would cause flakiness.
+  if (process.env.DISABLE_RATE_LIMIT === "1") {
+    return { ok: true, remaining: limit, retryAfterSec: 0 };
+  }
   const redis = await getRedis();
   if (redis) {
     try {

@@ -37,4 +37,27 @@ export default tseslint.config(
     files: ["prisma/**", "worker.ts", "*.config.*", "lib/jobs/**", "lib/email/**"],
     rules: { "no-console": "off" },
   },
+  {
+    // Plain Node ESM config + scripts (.mjs): define Node globals so `no-undef`
+    // doesn't fire on process/console etc. (these files aren't covered by the
+    // TS/Next configs that otherwise provide the environment).
+    files: ["**/*.mjs", "scripts/**/*.{js,mjs}"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        fetch: "readonly",
+        module: "readonly",
+        require: "readonly",
+        __dirname: "readonly",
+        __filename: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+      },
+    },
+    rules: { "no-console": "off" },
+  },
 );

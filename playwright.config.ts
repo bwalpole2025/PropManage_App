@@ -25,6 +25,11 @@ export default defineConfig({
       STORAGE_DRIVER: "mock",
       QUEUE_DRIVER: "memory",
       EMAIL_DRIVER: "mock",
+      // Closed-beta gate: allow the seeded e2e users to sign in.
+      BETA_TESTER_EMAILS: "landlord@example.com,accountant@example.com",
+      // No Redis here; disable the in-memory rate limiter so repeated e2e
+      // sign-ins are never throttled.
+      DISABLE_RATE_LIMIT: "1",
     },
   },
 });

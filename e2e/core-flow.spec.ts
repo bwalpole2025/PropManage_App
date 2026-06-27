@@ -22,8 +22,8 @@ test.describe("core happy path", () => {
       },
     ]);
 
-    // --- Sign in (seeded landlord) ---------------------------------------
-    await page.goto("/login");
+    // --- Sign in (seeded landlord, closed-beta route) --------------------
+    await page.goto("/beta-access");
     await page.fill('input[name="email"]', "landlord@example.com");
     await page.fill('input[name="password"]', "Password123!");
     await page.getByRole("button", { name: /sign in/i }).click();

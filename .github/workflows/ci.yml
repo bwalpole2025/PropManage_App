@@ -33,6 +33,11 @@ jobs:
       STORAGE_DRIVER: "mock"
       QUEUE_DRIVER: "memory"
       EMAIL_DRIVER: "mock"
+      # Closed-beta gate: the seeded e2e users must be allow-listed to sign in.
+      BETA_TESTER_EMAILS: "landlord@example.com,accountant@example.com"
+      # No Redis in CI; disable the (in-memory) rate limiter so the e2e sign-ins
+      # are never throttled across the suite.
+      DISABLE_RATE_LIMIT: "1"
 
     steps:
       - uses: actions/checkout@v4
